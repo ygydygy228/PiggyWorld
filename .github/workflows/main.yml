@@ -68,7 +68,7 @@ jobs:
           godot --headless --verbose --path . --export-debug "Android" build/PiggyWorld.apk
           test -s build/PiggyWorld.apk
       - name: Upload APK
-        uses: actions/updade-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: PiggyWorld-Android
           path: build/PiggyWorld.apk
