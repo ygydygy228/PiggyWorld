@@ -1,15 +1,15 @@
 
-name: Build Piggy World APK
+name: Build PiggyWorld APK
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
+
     container:
       image: barichello/godot-ci:4.4.1
 
@@ -17,18 +17,26 @@ jobs:
       - name: Download project
         uses: actions/checkout@v4
 
-      - name: Prepare build
-        run: mkdir -p build
+      - name: Check Android environment
+        run: |
+          godot --version
+          java -version
+          test -f /root/debug.keystore
+          test -d /root/.local/share/godot/export_templates/4.4.1.stable
+          test -d /usr/lib/android-sdk
 
       - name: Import project
-        run: godot --headless --editor --path . --quit
+        run: |
+          mkdir -p build
+          godot --headless --path . --import
 
       - name: Build APK
-        run: godot --headless --path . --export-debug "Android" build/PiggyWorld.apk
+        run: |
+          godot --headless --path . --export-debug "Android" build/PiggyWorld.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PiggyWorld-Android-APK
+          name: PiggyWorld-Android
           path: build/PiggyWorld.apk
-          retention-days: 14
+          
