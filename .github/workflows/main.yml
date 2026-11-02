@@ -51,7 +51,7 @@ jobs:
 
       - name: Build APK
         run: |
-          godot --headless --path . --export-debug "Android" build/PiggyWorld.apk
+           godot --headless --path . --install-android-build-template --export-debug "Android" build/PiggyWorld.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
