@@ -1,5 +1,4 @@
 
-
 name: Build PiggyWorld APK
 
 on:
@@ -16,46 +15,40 @@ jobs:
 
     env:
       HOME: /root
+      DOCKER_CONFIG: /tmp/docker-config
 
     steps:
       - name: Download project
         uses: actions/checkout@v4
 
-      - name: Check Android environment
+      - name: Prepare environment
         run: |
-          echo "Checking Godot..."
-          godot --version
+          mkdir -p /tmp/docker-config build
 
-          echo "Checking Java..."
+          godot --version
           java -version
 
-          echo "Checking export templates..."
           test -f /root/.local/share/godot/export_templates/4.4.1.stable/android_debug.apk
-          test -f /root/.local/share/godot/export_templates/4.4.1.stable/android_release.apk
-
-          echo "Checking Java SDK..."
           test -x /usr/lib/jvm/java-17-openjdk-amd64/bin/java
-
-          echo "Checking Android SDK..."
           test -d /usr/lib/android-sdk/build-tools/33.0.2
-
-          echo "Checking Debug Keystore..."
           test -f /root/debug.keystore
 
-          echo "All checks passed!"
+          echo "Environment ready!"
 
       - name: Import project
         run: |
-          mkdir -p build
           godot --headless --path . --import
 
       - name: Build APK
         run: |
-           godot --headless --path . --install-android-build-template --export-debug "Android" build/PiggyWorld.apk
+          godot --headless --path . --export-debug "Android" build/PiggyWorld.apk
+          test -s build/PiggyWorld.apk
+          ls -lh build/PiggyWorld.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: PiggyWorld-Android
           path: build/PiggyWorld.apk
+          if-no-files-found: error
           
