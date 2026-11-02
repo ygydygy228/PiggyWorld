@@ -79,8 +79,17 @@ jobs:
           echo "=== GODOT EXPORT ==="
           godot --headless --verbose --path . --export-debug "Android" build/PiggyWorld.apk
 
-        
-
+              - name: Validate project
+                 run: |
+          test -f main.tscn
+          test -f game.gd
+          test -f project.godot
+          test -f export_presets.cfg
+          echo "Project files verified!"
+           - name: Build APK
+           run: |
+          godot --headless --verbose --path . --export-debug "Android" build/PiggyWorld.apk
+          test -s build/PiggyWorld.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
