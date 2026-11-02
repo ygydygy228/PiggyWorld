@@ -61,12 +61,24 @@ jobs:
         run: |
           godot --headless --verbose --path . --import
 
-      - name: Build APK
+      
+      - name: Diagnose Android export
         run: |
-          godot --headless --path . --export-debug "Android" build/PiggyWorld.apk
-          test -s build/PiggyWorld.apk
-          ls -lh build/PiggyWorld.apk
-                - name: Build APK
+          echo "=== PROJECT FILES ==="
+          ls -la
+          ls -la scenes || true
+
+          echo "=== EXPORT PRESETS ==="
+          cat export_presets.cfg
+
+          echo "=== ANDROID SDK ==="
+          ls -la /usr/lib/android-sdk
+          ls -la /usr/lib/android-sdk/platforms || true
+          ls -la /usr/lib/android-sdk/build-tools || true
+
+          echo "=== GODOT EXPORT ==="
+          godot --headless --verbose --path . --export-debug "Android" build/PiggyWorld.apk
+
         
 
       - name: Upload APK
