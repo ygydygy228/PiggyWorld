@@ -1,4 +1,5 @@
 
+
 name: Build PiggyWorld APK
 
 on:
@@ -13,17 +14,35 @@ jobs:
     container:
       image: barichello/godot-ci:4.4.1
 
+    env:
+      HOME: /root
+
     steps:
       - name: Download project
         uses: actions/checkout@v4
 
       - name: Check Android environment
         run: |
+          echo "Checking Godot..."
           godot --version
+
+          echo "Checking Java..."
           java -version
+
+          echo "Checking export templates..."
+          test -f /root/.local/share/godot/export_templates/4.4.1.stable/android_debug.apk
+          test -f /root/.local/share/godot/export_templates/4.4.1.stable/android_release.apk
+
+          echo "Checking Java SDK..."
+          test -x /usr/lib/jvm/java-17-openjdk-amd64/bin/java
+
+          echo "Checking Android SDK..."
+          test -d /usr/lib/android-sdk/build-tools/33.0.2
+
+          echo "Checking Debug Keystore..."
           test -f /root/debug.keystore
-          test -d /root/.local/share/godot/export_templates/4.4.1.stable
-          test -d /usr/lib/android-sdk
+
+          echo "All checks passed!"
 
       - name: Import project
         run: |
