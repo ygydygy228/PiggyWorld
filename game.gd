@@ -24,6 +24,10 @@ var message_label: Label
 var action_button: Button
 var save_timer: float = 0.0
 var atlas_texture: Texture2D
+var player_texture: Texture2D
+var animals_texture: Texture2D
+var houses_texture: Texture2D
+var tiles_texture: Texture2D
 var game_state: String = "loading"
 var game_ui_layer: CanvasLayer
 var menu_layer: CanvasLayer
@@ -32,6 +36,10 @@ var pause_button: Button
 func _ready() -> void:
     _configure_pixel_view()
     atlas_texture = load("res://assets/farm_atlas.svg") as Texture2D
+    player_texture = load("res://assets/player.png") as Texture2D
+    animals_texture = load("res://assets/animals.png") as Texture2D
+    houses_texture = load("res://assets/houses_furnitures.png") as Texture2D
+    tiles_texture = load("res://assets/tileset.png") as Texture2D
     _load_game()
     if world_objects.is_empty():
         _generate_world()
@@ -164,6 +172,9 @@ func _draw() -> void:
             "house":
                 _draw_house(screen_pos, int(item["variant"]))
     _draw_pig(view_size * 0.5)
+    var farmer_screen: Vector2 = Vector2(-42, 145) - camera_offset
+    if farmer_screen.x > -40 and farmer_screen.x < view_size.x + 40 and farmer_screen.y > -40 and farmer_screen.y < view_size.y + 40:
+        _draw_farmer(farmer_screen)
     _draw_joystick()
 
 func _draw_water(camera_offset: Vector2) -> void:
@@ -240,6 +251,11 @@ func _draw_bush(p: Vector2) -> void:
     draw_rect(Rect2(p + Vector2(-3, -12), Vector2(8, 3)), Color("#76b95a"))
 
 func _draw_house(p: Vector2, variant: int) -> void:
+    if houses_texture != null:
+        draw_rect(Rect2(p + Vector2(-38, 25), Vector2(76, 9)), Color(0.12, 0.2, 0.14, 0.24))
+        var house_source := Rect2(Vector2(0, 16), Vector2(64, 64)) if variant == 0 else Rect2(Vector2(0, 112), Vector2(64, 64))
+        draw_texture_rect_region(houses_texture, Rect2(p + Vector2(-42, -52), Vector2(84, 84)), house_source)
+        return
     draw_rect(Rect2(p + Vector2(-33, 19), Vector2(66, 8)), Color(0.12, 0.2, 0.14, 0.24))
     var wall: Color = Color("#e8c58a") if variant == 0 else Color("#d98f78")
     draw_rect(Rect2(p + Vector2(-28, -12), Vector2(56, 34)), Color("#65412f"))
@@ -259,6 +275,10 @@ func _draw_house(p: Vector2, variant: int) -> void:
     draw_rect(Rect2(p + Vector2(-22, 3), Vector2(5, 3)), Color("#fff0c9"))
 
 func _draw_pig(center: Vector2) -> void:
+    if animals_texture != null:
+        var frame_x: float = 17.0 if move_vector.length() > 0.08 or move_target.x > -9000 else 0.0
+        draw_texture_rect_region(animals_texture, Rect2(center + Vector2(-22, -22), Vector2(44, 44)), Rect2(Vector2(frame_x, 0), Vector2(16, 16)))
+        return
     var step: int = 1 if move_vector.length() > 0.08 or move_target.x > -9000 else 0
     var leg_shift: int = int(sin(animation_time * 13.0) * 3.0) if step == 1 else 0
     draw_rect(Rect2(center + Vector2(-16, 14), Vector2(32, 7)), Color("#355b3d"))
@@ -285,6 +305,13 @@ func _draw_pig(center: Vector2) -> void:
     draw_rect(Rect2(center + Vector2(5, 17 - leg_shift), Vector2(5, 3)), Color("#f1a0ad"))
     draw_rect(Rect2(center + Vector2(11, 8), Vector2(5, 3)), Color("#d8798a"))
     draw_rect(Rect2(center + Vector2(15, 6), Vector2(3, 3)), Color("#e78e9f"))
+
+
+func _draw_farmer(p: Vector2) -> void:
+    if player_texture == null:
+        return
+    var frame := Rect2(Vector2(0, 0), Vector2(21, 18))
+    draw_texture_rect_region(player_texture, Rect2(p + Vector2(-18, -24), Vector2(36, 36)), frame)
 
 func _draw_farm_patch(camera_offset: Vector2) -> void:
     var origin := Vector2(-18, 132) - camera_offset
