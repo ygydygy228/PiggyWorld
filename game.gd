@@ -1,6 +1,6 @@
 extends Node2D
 
-const VIEW_SIZE := Vector2(480, 270)
+var view_size: Vector2 = Vector2(360, 640)
 const TILE := 24.0
 const ISLAND_RADIUS := Vector2(760.0, 570.0)
 const PLAYER_SPEED := 112.0
@@ -37,6 +37,7 @@ func _configure_pixel_view() -> void:
     get_viewport().canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 
 func _process(delta: float) -> void:
+    view_size = get_viewport_rect().size
     animation_time += delta
     var keyboard: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
     move_vector = joystick_vector if joystick_vector.length() > 0.12 else keyboard
@@ -71,7 +72,7 @@ func _unhandled_input(event: InputEvent) -> void:
                 joystick_origin = event.position
                 joystick_vector = Vector2.ZERO
             else:
-                var camera_offset: Vector2 = player_pos - VIEW_SIZE * 0.5
+                var camera_offset: Vector2 = player_pos - view_size * 0.5
                 move_target = event.position + camera_offset
         elif event.index == joystick_touch:
             joystick_touch = -1
@@ -105,9 +106,9 @@ func _draw() -> void:
     draw_rect(Rect2(Vector2.ZERO, VIEW_SIZE), Color("#397fa0"))
     _draw_water(camera_offset)
     var min_x: int = floori(camera_offset.x / TILE) - 1
-    var max_x: int = ceili((camera_offset.x + VIEW_SIZE.x) / TILE) + 1
+    var max_x: int = ceili((camera_offset.x + view_size.x) / TILE) + 1
     var min_y: int = floori(camera_offset.y / TILE) - 1
-    var max_y: int = ceili((camera_offset.y + VIEW_SIZE.y) / TILE) + 1
+    var max_y: int = ceili((camera_offset.y + view_size.y) / TILE) + 1
     for ty in range(min_y, max_y):
         for tx in range(min_x, max_x):
             var world: Vector2 = Vector2(tx * TILE, ty * TILE)
@@ -145,8 +146,12 @@ func _draw() -> void:
     _draw_joystick()
 
 func _draw_water(camera_offset: Vector2) -> void:
-    for y in range(-1, 12):
-        for x in range(-1, 22):
+    var start_x: int = floori(camera_offset.x * 0.12 / 32.0) - 1
+    var end_x: int = ceili((camera_offset.x * 0.12 + view_size.x) / 32.0) + 1
+    var start_y: int = floori(camera_offset.y * 0.12 / 32.0) - 1
+    var end_y: int = ceili((camera_offset.y * 0.12 + view_size.y) / 32.0) + 1
+    for y in range(start_y, end_y):
+        for x in range(start_x, end_x):
             var p: Vector2 = Vector2(x * 32.0, y * 32.0)
             var n: int = absi(x * 73129 + y * 19391) % 4
             var blues: Array[Color] = [Color("#397fa0"), Color("#3c85a5"), Color("#36799a"), Color("#4289a8")]
@@ -172,19 +177,24 @@ func _draw_path(camera_offset: Vector2) -> void:
             draw_rect(Rect2(screen + Vector2(4, 5), Vector2(3, 2)), Color("#e0c18a"))
 
 func _draw_tree(p: Vector2, variant: int) -> void:
-    draw_rect(Rect2(p + Vector2(-9, 4), Vector2(19, 7)), Color("#3f7442"))
-    draw_rect(Rect2(p + Vector2(-4, -13), Vector2(9, 23)), Color("#79502e"))
-    draw_rect(Rect2(p + Vector2(-17, -34), Vector2(34, 25)), Color("#286c42"))
-    draw_rect(Rect2(p + Vector2(-13, -39), Vector2(26, 25)), Color("#39864b"))
-    draw_rect(Rect2(p + Vector2(-7, -43), Vector2(15, 12)), Color("#4c9b53"))
-    draw_rect(Rect2(p + Vector2(-12, -29), Vector2(7, 6)), Color("#62ad5a"))
+    draw_rect(Rect2(p + Vector2(-14, 5), Vector2(29, 8)), Color("#315e3b"))
+    draw_rect(Rect2(p + Vector2(-5, -15), Vector2(11, 25)), Color("#684329"))
+    draw_rect(Rect2(p + Vector2(-20, -39), Vector2(40, 31)), Color("#204f37"))
+    draw_rect(Rect2(p + Vector2(-17, -46), Vector2(34, 31)), Color("#2e7545"))
+    draw_rect(Rect2(p + Vector2(-11, -53), Vector2(23, 22)), Color("#39894b"))
+    draw_rect(Rect2(p + Vector2(-5, -57), Vector2(13, 13)), Color("#4d9e55"))
+    draw_rect(Rect2(p + Vector2(-15, -37), Vector2(10, 9)), Color("#60ad5c"))
+    draw_rect(Rect2(p + Vector2(4, -31), Vector2(9, 8)), Color("#438f4c"))
+    draw_rect(Rect2(p + Vector2(-2, -14), Vector2(4, 13)), Color("#8c5a32"))
     if variant % 2 == 0:
         draw_rect(Rect2(p + Vector2(5, -22), Vector2(6, 5)), Color("#74b95d"))
 
 func _draw_rock(p: Vector2, variant: int) -> void:
-    draw_rect(Rect2(p + Vector2(-12, -3), Vector2(25, 12)), Color("#668078"))
-    draw_rect(Rect2(p + Vector2(-9, -9), Vector2(19, 12)), Color("#8fa49a"))
-    draw_rect(Rect2(p + Vector2(-5, -12), Vector2(10, 5)), Color("#b2c1b2"))
+    draw_rect(Rect2(p + Vector2(-14, 0), Vector2(29, 11)), Color("#586d68"))
+    draw_rect(Rect2(p + Vector2(-12, -7), Vector2(25, 13)), Color("#788f87"))
+    draw_rect(Rect2(p + Vector2(-7, -13), Vector2(17, 12)), Color("#9eafa3"))
+    draw_rect(Rect2(p + Vector2(-3, -15), Vector2(8, 5)), Color("#d0d8c8"))
+    draw_rect(Rect2(p + Vector2(-9, -3), Vector2(5, 3)), Color("#b6c5b7"))
     if variant % 2 == 0:
         draw_rect(Rect2(p + Vector2(3, -4), Vector2(4, 3)), Color("#d0d6c8"))
 
@@ -196,10 +206,12 @@ func _draw_bush(p: Vector2) -> void:
 
 func _draw_house(p: Vector2, variant: int) -> void:
     var wall: Color = Color("#e8c58a") if variant == 0 else Color("#d98f78")
-    draw_rect(Rect2(p + Vector2(-24, -15), Vector2(48, 28)), Color("#85543d"))
-    draw_rect(Rect2(p + Vector2(-22, -18), Vector2(44, 26)), wall)
-    draw_rect(Rect2(p + Vector2(-27, -25), Vector2(54, 12)), Color("#9c5147"))
-    draw_rect(Rect2(p + Vector2(-22, -30), Vector2(44, 7)), Color("#bd6653"))
+    draw_rect(Rect2(p + Vector2(-28, -12), Vector2(56, 34)), Color("#65412f"))
+    draw_rect(Rect2(p + Vector2(-25, -19), Vector2(50, 34)), wall)
+    draw_rect(Rect2(p + Vector2(-30, -28), Vector2(60, 15)), Color("#733c3d"))
+    draw_rect(Rect2(p + Vector2(-25, -34), Vector2(50, 12)), Color("#a74e49"))
+    draw_rect(Rect2(p + Vector2(-18, -31), Vector2(36, 5)), Color("#d17a62"))
+    draw_rect(Rect2(p + Vector2(-23, 9), Vector2(46, 3)), Color("#f1d29a"))
     draw_rect(Rect2(p + Vector2(-5, -7), Vector2(10, 15)), Color("#80523b"))
     draw_rect(Rect2(p + Vector2(-17, -11), Vector2(8, 8)), Color("#83c7d2"))
     draw_rect(Rect2(p + Vector2(9, -11), Vector2(8, 8)), Color("#83c7d2"))
@@ -208,14 +220,18 @@ func _draw_house(p: Vector2, variant: int) -> void:
 func _draw_pig(center: Vector2) -> void:
     var step: int = 1 if move_vector.length() > 0.08 or move_target.x > -9000 else 0
     var leg_shift: int = int(sin(animation_time * 13.0) * 3.0) if step == 1 else 0
-    draw_rect(Rect2(center + Vector2(-13, 13), Vector2(27, 5)), Color("#3e7045"))
-    draw_rect(Rect2(center + Vector2(-10, -5), Vector2(21, 23)), Color("#e88b9a"))
-    draw_rect(Rect2(center + Vector2(-8, -13), Vector2(19, 17)), Color("#f4a7b1"))
+    draw_rect(Rect2(center + Vector2(-16, 14), Vector2(32, 7)), Color("#355b3d"))
+    draw_rect(Rect2(center + Vector2(-11, -3), Vector2(24, 23)), Color("#c96f82"))
+    draw_rect(Rect2(center + Vector2(-12, -8), Vector2(25, 20)), Color("#e78e9f"))
+    draw_rect(Rect2(center + Vector2(-9, -16), Vector2(20, 17)), Color("#f6b0b9"))
+    draw_rect(Rect2(center + Vector2(-7, -4), Vector2(14, 15)), Color("#f2a3af"))
     draw_rect(Rect2(center + Vector2(-10, -18), Vector2(7, 9)), Color("#ed8998"))
     draw_rect(Rect2(center + Vector2(4, -18), Vector2(7, 9)), Color("#ed8998"))
     draw_rect(Rect2(center + Vector2(-8, -12), Vector2(4, 5)), Color("#ffd0d0"))
     draw_rect(Rect2(center + Vector2(6, -12), Vector2(4, 5)), Color("#ffd0d0"))
-    draw_rect(Rect2(center + Vector2(-5, -4), Vector2(12, 7)), Color("#f7c0c4"))
+    draw_rect(Rect2(center + Vector2(-6, -5), Vector2(14, 8)), Color("#f7c0c4"))
+    draw_rect(Rect2(center + Vector2(-11, 3), Vector2(4, 3)), Color("#d8798a"))
+    draw_rect(Rect2(center + Vector2(8, 3), Vector2(4, 3)), Color("#d8798a"))
     draw_rect(Rect2(center + Vector2(-3, -2), Vector2(2, 3)), Color("#a94f68"))
     draw_rect(Rect2(center + Vector2(4, -2), Vector2(2, 3)), Color("#a94f68"))
     draw_rect(Rect2(center + Vector2(-7, 15 + leg_shift), Vector2(6, 5)), Color("#c96f82"))
@@ -223,7 +239,7 @@ func _draw_pig(center: Vector2) -> void:
     draw_rect(Rect2(center + Vector2(-13, 2), Vector2(4, 4)), Color("#f4a7b1"))
 
 func _draw_joystick() -> void:
-    draw_circle(Vector2(63, 215), 31, Color(0.08, 0.16, 0.17, 0.48))
+    draw_circle(Vector2(68, view_size.y - 78), 31, Color(0.08, 0.16, 0.17, 0.48))
     draw_circle(Vector2(63, 215), 25, Color(0.78, 0.9, 0.75, 0.3))
     var knob: Vector2 = Vector2(63, 215) + joystick_vector * 15.0
     draw_circle(knob, 10, Color("#f2e7c7"))
@@ -232,7 +248,7 @@ func _build_ui() -> void:
     var layer := CanvasLayer.new()
     add_child(layer)
     var panel := PanelContainer.new()
-    panel.position = Vector2(8, 7)
+    panel.position = Vector2(10, 10)
     panel.add_theme_stylebox_override("panel", _style(Color("#263f39"), 8))
     layer.add_child(panel)
     var column := VBoxContainer.new()
@@ -241,27 +257,27 @@ func _build_ui() -> void:
     var title := Label.new()
     title.text = "PIGGY ISLAND"
     title.add_theme_color_override("font_color", Color("#f6e8b8"))
-    title.add_theme_font_size_override("font_size", 12)
+    title.add_theme_font_size_override("font_size", 15)
     column.add_child(title)
     inventory_label = Label.new()
     inventory_label.add_theme_color_override("font_color", Color.WHITE)
-    inventory_label.add_theme_font_size_override("font_size", 10)
+    inventory_label.add_theme_font_size_override("font_size", 12)
     column.add_child(inventory_label)
     message_label = Label.new()
     message_label.text = "Собирай ресурсы и обустрой остров!"
-    message_label.position = Vector2(8, 54)
+    message_label.position = Vector2(10, 82)
     message_label.add_theme_color_override("font_color", Color("#fff3c8"))
-    message_label.add_theme_font_size_override("font_size", 10)
+    message_label.add_theme_font_size_override("font_size", 12)
     layer.add_child(message_label)
-    action_button = _make_button("СОБРАТЬ", Vector2(365, 207), Vector2(105, 28))
+    action_button = _make_button("СОБРАТЬ", Vector2(view_size.x - 116, view_size.y - 76), Vector2(106, 34))
     action_button.pressed.connect(_interact)
     layer.add_child(action_button)
-    var build_button := _make_button("ПОСТРОИТЬ", Vector2(365, 174), Vector2(105, 28))
+    var build_button := _make_button("ПОСТРОИТЬ", Vector2(view_size.x - 116, view_size.y - 119), Vector2(106, 34))
     build_button.pressed.connect(_build_small_house)
     layer.add_child(build_button)
     var help := Label.new()
     help.text = "WASD / джойстик • E — действие"
-    help.position = Vector2(8, 252)
+    help.position = Vector2(10, view_size.y - 22)
     help.add_theme_font_size_override("font_size", 8)
     help.add_theme_color_override("font_color", Color("#f8f1d9"))
     layer.add_child(help)
@@ -272,7 +288,7 @@ func _make_button(text_value: String, pos: Vector2, button_size: Vector2) -> But
     button.text = text_value
     button.position = pos
     button.size = button_size
-    button.add_theme_font_size_override("font_size", 10)
+    button.add_theme_font_size_override("font_size", 12)
     button.add_theme_color_override("font_color", Color("#fff4d6"))
     button.add_theme_stylebox_override("normal", _style(Color("#527b55"), 7))
     button.add_theme_stylebox_override("hover", _style(Color("#68965e"), 7))
