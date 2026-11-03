@@ -85,7 +85,7 @@ func _build_world() -> void:
         var z := -35.0 + i * 10.0
         _add_box(self, Vector3(0, -0.02, z), Vector3(8, 0.08, 5), Color(0.78, 0.65, 0.43), false)
     # Pond
-    _add_cylinder(self, Vector3(22, -0.02, -15), Vector2(8, 0.12), Color(0.2, 0.65, 0.88), false)
+    _make_cylinder(self, Vector3(22, -0.02, -15), Vector2(8, 0.12), Color(0.2, 0.65, 0.88), false)
     # Trees in clusters
     for i in range(42):
         var x := randf_range(-43, 43)
@@ -214,7 +214,7 @@ func _input(event: InputEvent) -> void:
             joystick_touch = -1
             joystick_vector = Vector2.ZERO
     elif event is InputEventScreenDrag and event.index == joystick_touch:
-        var drag_delta := (event.position - joystick_origin) / 65.0
+        var drag_delta: Vector2 = (event.position - joystick_origin) / 65.0
         joystick_vector = Vector2(drag_delta.x, drag_delta.y).limit_length(1.0)
 
 func _check_coin_pickups() -> void:
@@ -231,7 +231,7 @@ func _check_coin_pickups() -> void:
 
 func _make_tree(pos: Vector3) -> void:
     _make_cylinder(self, pos + Vector3(0,1.0,0), Vector2(0.22,2.0), Color(0.38,0.22,0.12), true)
-    var green := [Color(0.16,0.52,0.2), Color(0.22,0.62,0.24), Color(0.32,0.68,0.28)][randi()%3]
+    var green: Color = [Color(0.16,0.52,0.2), Color(0.22,0.62,0.24), Color(0.32,0.68,0.28)][randi()%3]
     _make_sphere(self, pos + Vector3(0,2.45,0), Vector3(1.15,1.35,1.1), green, true)
     _make_sphere(self, pos + Vector3(-0.55,2.0,0.1), Vector3(0.75,0.85,0.75), green, true)
 
