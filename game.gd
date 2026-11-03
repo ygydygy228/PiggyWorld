@@ -23,13 +23,20 @@ var inventory_label: Label
 var message_label: Label
 var action_button: Button
 var save_timer: float = 0.0
+var atlas_texture: Texture2D
+var game_state: String = "loading"
+var game_ui_layer: CanvasLayer
+var menu_layer: CanvasLayer
+var pause_button: Button
 
 func _ready() -> void:
     _configure_pixel_view()
+    atlas_texture = load("res://assets/farm_atlas.svg") as Texture2D
     _load_game()
     if world_objects.is_empty():
         _generate_world()
     _build_ui()
+    _show_loading()
     queue_redraw()
 
 func _configure_pixel_view() -> void:
@@ -39,6 +46,9 @@ func _configure_pixel_view() -> void:
 func _process(delta: float) -> void:
     view_size = get_viewport_rect().size
     animation_time += delta
+    if game_state != "playing":
+        queue_redraw()
+        return
     var keyboard: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
     move_vector = joystick_vector if joystick_vector.length() > 0.12 else keyboard
     if move_vector.length() > 0.08:
@@ -63,6 +73,8 @@ func _process(delta: float) -> void:
     queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
+    if game_state != "playing":
+        return
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_E:
         _interact()
     if event is InputEventScreenTouch:
@@ -102,6 +114,9 @@ func _generate_world() -> void:
     _save_game()
 
 func _draw() -> void:
+    if game_state != "playing" and game_state != "paused":
+        _draw_menu_background()
+        return
     var camera_offset: Vector2 = player_pos - view_size * 0.5
     draw_rect(Rect2(Vector2.ZERO, view_size), Color("#397fa0"))
     _draw_water(camera_offset)
@@ -124,7 +139,11 @@ func _draw() -> void:
                     var variation: int = absi(tx * 92821 + ty * 68917) % 5
                     var greens: Array[Color] = [Color("#65ad55"), Color("#6db65b"), Color("#5fa44e"), Color("#74ba60"), Color("#68ae55")]
                     color = greens[variation]
-                draw_rect(Rect2(screen, Vector2(TILE + 1, TILE + 1)), color)
+                if atlas_texture != null:
+                    var source_x: int = 32 if distance > 0.965 else (16 if variation == 0 else 0)
+                    draw_texture_rect_region(atlas_texture, Rect2(screen, Vector2(TILE + 1, TILE + 1)), Rect2(Vector2(source_x, 0), Vector2(16, 16)))
+                else:
+                    draw_rect(Rect2(screen, Vector2(TILE + 1, TILE + 1)), color)
                 if distance < 0.95:
                     _draw_ground_detail(screen, tx, ty)
     _draw_path(camera_offset)
@@ -155,7 +174,10 @@ func _draw_water(camera_offset: Vector2) -> void:
             var p: Vector2 = Vector2(x * 32.0, y * 32.0)
             var n: int = absi(x * 73129 + y * 19391) % 4
             var blues: Array[Color] = [Color("#397fa0"), Color("#3c85a5"), Color("#36799a"), Color("#4289a8")]
-            draw_rect(Rect2(p - camera_offset * 0.12, Vector2(32, 32)), blues[n])
+            if atlas_texture != null:
+                draw_texture_rect_region(atlas_texture, Rect2(p - camera_offset * 0.12, Vector2(32, 32)), Rect2(Vector2(64, 0), Vector2(16, 16)))
+            else:
+                draw_rect(Rect2(p - camera_offset * 0.12, Vector2(32, 32)), blues[n])
             if n == 1:
                 draw_rect(Rect2(p + Vector2(9, 12) - camera_offset * 0.12, Vector2(7, 2)), Color("#72b5c3"))
 
@@ -239,13 +261,15 @@ func _draw_pig(center: Vector2) -> void:
     draw_rect(Rect2(center + Vector2(-13, 2), Vector2(4, 4)), Color("#f4a7b1"))
 
 func _draw_joystick() -> void:
-    draw_circle(Vector2(68, view_size.y - 78), 31, Color(0.08, 0.16, 0.17, 0.48))
-    draw_circle(Vector2(63, 215), 25, Color(0.78, 0.9, 0.75, 0.3))
-    var knob: Vector2 = Vector2(63, 215) + joystick_vector * 15.0
+    var base: Vector2 = Vector2(68, view_size.y - 78)
+    draw_circle(base, 31, Color(0.08, 0.16, 0.17, 0.48))
+    draw_circle(base, 25, Color(0.78, 0.9, 0.75, 0.3))
+    var knob: Vector2 = base + joystick_vector * 15.0
     draw_circle(knob, 10, Color("#f2e7c7"))
 
 func _build_ui() -> void:
     var layer := CanvasLayer.new()
+    game_ui_layer = layer
     add_child(layer)
     var panel := PanelContainer.new()
     panel.position = Vector2(10, 10)
@@ -281,6 +305,10 @@ func _build_ui() -> void:
     help.add_theme_font_size_override("font_size", 8)
     help.add_theme_color_override("font_color", Color("#f8f1d9"))
     layer.add_child(help)
+    pause_button = _make_button("Ⅱ", Vector2(view_size.x - 46, 10), Vector2(36, 34))
+    pause_button.pressed.connect(_toggle_pause)
+    layer.add_child(pause_button)
+    game_ui_layer.visible = false
     _refresh_inventory()
 
 func _make_button(text_value: String, pos: Vector2, button_size: Vector2) -> Button:
@@ -380,3 +408,161 @@ func _load_game() -> void:
     var saved_objects = config.get_value("world", "objects", [])
     if saved_objects is Array:
         world_objects.assign(saved_objects)
+
+func _draw_menu_background() -> void:
+    draw_rect(Rect2(Vector2.ZERO, view_size), Color("#315f70"))
+    for i in range(8):
+        var y: float = float(i) * 42.0 + fmod(animation_time * 5.0, 42.0)
+        draw_line(Vector2(0, y), Vector2(view_size.x, y + 12.0), Color(0.65, 0.86, 0.86, 0.10), 2.0)
+    var center: Vector2 = Vector2(view_size.x * 0.5, view_size.y * 0.54)
+    var sand := PackedVector2Array()
+    var grass := PackedVector2Array()
+    for i in range(48):
+        var angle: float = TAU * float(i) / 48.0
+        sand.append(center + Vector2(cos(angle) * view_size.x * 0.48, sin(angle) * view_size.y * 0.235))
+        grass.append(center + Vector2(cos(angle) * view_size.x * 0.445, sin(angle) * view_size.y * 0.205))
+    draw_colored_polygon(sand, Color("#d7b875"))
+    draw_colored_polygon(grass, Color("#70ad59"))
+    for i in range(24):
+        var px: float = center.x + sin(float(i) * 9.7) * view_size.x * 0.34
+        var py: float = center.y + cos(float(i) * 4.3) * view_size.y * 0.13
+        draw_circle(Vector2(px, py), 2.0, Color("#91c875"))
+    _draw_tree(center + Vector2(-view_size.x * 0.27, -view_size.y * 0.07), 0)
+    _draw_tree(center + Vector2(view_size.x * 0.27, view_size.y * 0.04), 1)
+    _draw_house(center + Vector2(view_size.x * 0.12, -view_size.y * 0.075), 0)
+    _draw_pig(center + Vector2(-view_size.x * 0.04, view_size.y * 0.09))
+
+func _create_menu_page(title_text: String, subtitle_text: String) -> VBoxContainer:
+    _clear_menu()
+    menu_layer = CanvasLayer.new()
+    add_child(menu_layer)
+    var root := Control.new()
+    root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    menu_layer.add_child(root)
+    var shade := ColorRect.new()
+    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    shade.color = Color(0.08, 0.15, 0.16, 0.48)
+    root.add_child(shade)
+    var center := CenterContainer.new()
+    center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    root.add_child(center)
+    var panel := PanelContainer.new()
+    panel.custom_minimum_size = Vector2(minf(view_size.x - 34.0, 330.0), 0)
+    panel.add_theme_stylebox_override("panel", _style(Color("#294b40"), 16))
+    center.add_child(panel)
+    var column := VBoxContainer.new()
+    column.add_theme_constant_override("separation", 12)
+    column.add_theme_constant_override("margin_top", 12)
+    panel.add_child(column)
+    var title := Label.new()
+    title.text = title_text
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_color_override("font_color", Color("#ffe7a8"))
+    title.add_theme_font_size_override("font_size", 30)
+    column.add_child(title)
+    var subtitle := Label.new()
+    subtitle.text = subtitle_text
+    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    subtitle.add_theme_color_override("font_color", Color("#e1e9c9"))
+    subtitle.add_theme_font_size_override("font_size", 13)
+    column.add_child(subtitle)
+    var spacer := Control.new()
+    spacer.custom_minimum_size.y = 5
+    column.add_child(spacer)
+    return column
+
+func _add_menu_button(column: VBoxContainer, caption: String, action: Callable) -> void:
+    var button := Button.new()
+    button.text = caption
+    button.custom_minimum_size = Vector2(250, 48)
+    button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    button.add_theme_font_size_override("font_size", 17)
+    button.add_theme_color_override("font_color", Color("#fff2d1"))
+    button.add_theme_stylebox_override("normal", _style(Color("#628d58"), 10))
+    button.add_theme_stylebox_override("hover", _style(Color("#79a966"), 10))
+    button.add_theme_stylebox_override("pressed", _style(Color("#456d4c"), 10))
+    button.pressed.connect(action)
+    column.add_child(button)
+
+func _clear_menu() -> void:
+    if is_instance_valid(menu_layer):
+        menu_layer.queue_free()
+    menu_layer = null
+
+func _show_loading() -> void:
+    game_state = "loading"
+    var column := _create_menu_page("PIGGYWORLD", "Твой маленький уютный остров")
+    var loading := Label.new()
+    loading.text = "Подготавливаем ферму..."
+    loading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    loading.add_theme_color_override("font_color", Color("#fff2d1"))
+    column.add_child(loading)
+    var progress := ProgressBar.new()
+    progress.custom_minimum_size = Vector2(245, 18)
+    progress.show_percentage = false
+    column.add_child(progress)
+    var tween := create_tween()
+    tween.tween_property(progress, "value", 100.0, 1.25)
+    get_tree().create_timer(1.35).timeout.connect(_show_main_menu)
+
+func _show_main_menu() -> void:
+    game_state = "menu"
+    if is_instance_valid(game_ui_layer):
+        game_ui_layer.visible = false
+    var column := _create_menu_page("PIGGYWORLD", "Уютная жизнь на зелёном острове")
+    _add_menu_button(column, "ПРОДОЛЖИТЬ", _start_game)
+    _add_menu_button(column, "НОВАЯ ИГРА", _new_game)
+    _add_menu_button(column, "НАСТРОЙКИ", _show_settings)
+    var footer := Label.new()
+    footer.text = "Собирай ресурсы • строй • исследуй"
+    footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    footer.add_theme_color_override("font_color", Color("#c8d9b9"))
+    footer.add_theme_font_size_override("font_size", 10)
+    column.add_child(footer)
+    queue_redraw()
+
+func _show_settings() -> void:
+    game_state = "menu"
+    var column := _create_menu_page("НАСТРОЙКИ", "Как играть")
+    var info := Label.new()
+    info.text = "Джойстик слева — движение\nНажми на землю — пройти к месту\nКнопка «Собрать» — ресурсы\nКнопка «Построить» — новый дом"
+    info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    info.add_theme_color_override("font_color", Color("#f5edcf"))
+    info.add_theme_font_size_override("font_size", 14)
+    column.add_child(info)
+    _add_menu_button(column, "НАЗАД", _show_main_menu)
+
+func _show_pause_menu() -> void:
+    var column := _create_menu_page("ПАУЗА", "Остров подождёт")
+    _add_menu_button(column, "ПРОДОЛЖИТЬ", _start_game)
+    _add_menu_button(column, "СОХРАНИТЬ И В МЕНЮ", _return_to_menu)
+
+func _start_game() -> void:
+    game_state = "playing"
+    _clear_menu()
+    if is_instance_valid(game_ui_layer):
+        game_ui_layer.visible = true
+    queue_redraw()
+
+func _new_game() -> void:
+    player_pos = Vector2.ZERO
+    wood = 0
+    stone = 0
+    berries = 0
+    coins = 0
+    _generate_world()
+    _refresh_inventory()
+    _start_game()
+
+func _return_to_menu() -> void:
+    _save_game()
+    _show_main_menu()
+
+func _toggle_pause() -> void:
+    if game_state == "playing":
+        game_state = "paused"
+        if is_instance_valid(game_ui_layer):
+            game_ui_layer.visible = false
+        _show_pause_menu()
+    elif game_state == "paused":
+        _start_game()
