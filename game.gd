@@ -24,10 +24,6 @@ var message_label: Label
 var action_button: Button
 var save_timer: float = 0.0
 var atlas_texture: Texture2D
-var player_texture: Texture2D
-var animals_texture: Texture2D
-var houses_texture: Texture2D
-var tiles_texture: Texture2D
 var game_state: String = "loading"
 var game_ui_layer: CanvasLayer
 var menu_layer: CanvasLayer
@@ -35,11 +31,7 @@ var pause_button: Button
 
 func _ready() -> void:
     _configure_pixel_view()
-    atlas_texture = load("res://assets/farm_atlas.svg") as Texture2D
-    player_texture = load("res://assets/player.png") as Texture2D
-    animals_texture = load("res://assets/animals.png") as Texture2D
-    houses_texture = load("res://assets/houses_furnitures.png") as Texture2D
-    tiles_texture = load("res://assets/tileset.png") as Texture2D
+    atlas_texture = load("res://assets/piggyworld_atlas.svg") as Texture2D
     _load_game()
     if world_objects.is_empty():
         _generate_world()
@@ -148,7 +140,7 @@ func _draw() -> void:
                     var greens: Array[Color] = [Color("#65ad55"), Color("#6db65b"), Color("#5fa44e"), Color("#74ba60"), Color("#68ae55")]
                     color = greens[variation]
                 if atlas_texture != null:
-                    var source_x: int = 32 if distance > 0.965 else (16 if variation == 0 else 0)
+                    var source_x: int = 32 if distance > 0.965 else (240 if variation == 4 else (16 if variation == 1 else 0))
                     draw_texture_rect_region(atlas_texture, Rect2(screen, Vector2(TILE + 1, TILE + 1)), Rect2(Vector2(source_x, 0), Vector2(16, 16)))
                 else:
                     draw_rect(Rect2(screen, Vector2(TILE + 1, TILE + 1)), color)
@@ -172,9 +164,6 @@ func _draw() -> void:
             "house":
                 _draw_house(screen_pos, int(item["variant"]))
     _draw_pig(view_size * 0.5)
-    var farmer_screen: Vector2 = Vector2(-42, 145) - camera_offset
-    if farmer_screen.x > -40 and farmer_screen.x < view_size.x + 40 and farmer_screen.y > -40 and farmer_screen.y < view_size.y + 40:
-        _draw_farmer(farmer_screen)
     _draw_joystick()
 
 func _draw_water(camera_offset: Vector2) -> void:
@@ -206,143 +195,80 @@ func _draw_path(camera_offset: Vector2) -> void:
     for x in range(-34, 35):
         var world_x: float = float(x) * 24.0
         var world_y: float = sin(world_x / 155.0) * 82.0 + 58.0
-        var screen: Vector2 = Vector2(world_x, world_y) - camera_offset
+        var screen := Vector2(world_x, world_y) - camera_offset
         if screen.x > -24 and screen.x < view_size.x + 24 and screen.y > -24 and screen.y < view_size.y + 24:
-            draw_rect(Rect2(screen, Vector2(24, 24)), Color("#c9a66b"))
-            draw_rect(Rect2(screen + Vector2(4, 5), Vector2(3, 2)), Color("#e0c18a"))
+            if atlas_texture != null:
+                draw_texture_rect_region(atlas_texture, Rect2(screen, Vector2(24, 24)), Rect2(Vector2(48, 0), Vector2(16, 16)))
+            else:
+                draw_rect(Rect2(screen, Vector2(24, 24)), Color("#bd9861"))
 
 func _draw_tree(p: Vector2, variant: int) -> void:
-    draw_rect(Rect2(p + Vector2(-18, 8), Vector2(36, 7)), Color(0.12, 0.24, 0.16, 0.24))
-    draw_rect(Rect2(p + Vector2(-14, 5), Vector2(29, 8)), Color("#315e3b"))
-    draw_rect(Rect2(p + Vector2(-5, -15), Vector2(11, 25)), Color("#684329"))
-    draw_rect(Rect2(p + Vector2(-20, -39), Vector2(40, 31)), Color("#204f37"))
-    draw_rect(Rect2(p + Vector2(-17, -46), Vector2(34, 31)), Color("#2e7545"))
-    draw_rect(Rect2(p + Vector2(-11, -53), Vector2(23, 22)), Color("#39894b"))
-    draw_rect(Rect2(p + Vector2(-5, -57), Vector2(13, 13)), Color("#4d9e55"))
-    draw_rect(Rect2(p + Vector2(-15, -37), Vector2(10, 9)), Color("#60ad5c"))
-    draw_rect(Rect2(p + Vector2(4, -31), Vector2(9, 8)), Color("#438f4c"))
-    draw_rect(Rect2(p + Vector2(-2, -14), Vector2(4, 13)), Color("#8c5a32"))
-    if variant % 2 == 0:
-        draw_rect(Rect2(p + Vector2(5, -22), Vector2(6, 5)), Color("#74b95d"))
-    draw_rect(Rect2(p + Vector2(-12, -43), Vector2(7, 4)), Color("#79c46b"))
-    draw_rect(Rect2(p + Vector2(7, -34), Vector2(5, 4)), Color("#276c40"))
-    draw_rect(Rect2(p + Vector2(-2, -49), Vector2(4, 3)), Color("#8bd078"))
-    draw_rect(Rect2(p + Vector2(-3, -5), Vector2(6, 11)), Color("#9b6840"))
+    if atlas_texture != null:
+        var source := Rect2(Vector2(48, 40), Vector2(48, 64)) if variant % 3 == 0 else Rect2(Vector2(0, 40), Vector2(48, 64))
+        var scale := 1.0 if variant % 2 == 0 else 0.88
+        var size := Vector2(72, 96) * scale
+        draw_texture_rect_region(atlas_texture, Rect2(p + Vector2(-size.x * 0.5, -size.y + 10), size), source)
+        return
+    draw_rect(Rect2(p + Vector2(-12, -28), Vector2(24, 34)), Color("#397e49"))
 
 func _draw_rock(p: Vector2, variant: int) -> void:
-    draw_rect(Rect2(p + Vector2(-17, 7), Vector2(35, 6)), Color(0.12, 0.2, 0.18, 0.24))
-    draw_rect(Rect2(p + Vector2(-14, 0), Vector2(29, 11)), Color("#586d68"))
-    draw_rect(Rect2(p + Vector2(-12, -7), Vector2(25, 13)), Color("#788f87"))
-    draw_rect(Rect2(p + Vector2(-7, -13), Vector2(17, 12)), Color("#9eafa3"))
-    draw_rect(Rect2(p + Vector2(-3, -15), Vector2(8, 5)), Color("#d0d8c8"))
-    draw_rect(Rect2(p + Vector2(-9, -3), Vector2(5, 3)), Color("#b6c5b7"))
-    if variant % 2 == 0:
-        draw_rect(Rect2(p + Vector2(3, -4), Vector2(4, 3)), Color("#d0d6c8"))
-    draw_rect(Rect2(p + Vector2(-8, -8), Vector2(4, 2)), Color("#e4e8dc"))
-    draw_rect(Rect2(p + Vector2(7, 1), Vector2(4, 2)), Color("#52645f"))
+    if atlas_texture != null:
+        var size := Vector2(36, 36) if variant % 2 == 0 else Vector2(30, 30)
+        draw_texture_rect_region(atlas_texture, Rect2(p + Vector2(-size.x * 0.5, -size.y + 5), size), Rect2(Vector2(128, 40), Vector2(24, 24)))
+        return
+    draw_rect(Rect2(p + Vector2(-14, -12), Vector2(28, 20)), Color("#91a69a"))
 
 func _draw_bush(p: Vector2) -> void:
-    draw_rect(Rect2(p + Vector2(-15, 6), Vector2(31, 5)), Color(0.12, 0.22, 0.14, 0.22))
-    draw_rect(Rect2(p + Vector2(-12, -3), Vector2(25, 10)), Color("#347844"))
-    draw_rect(Rect2(p + Vector2(-9, -10), Vector2(19, 13)), Color("#4b9b50"))
-    for berry in [Vector2(-5, -5), Vector2(4, -7), Vector2(7, 0)]:
-        draw_rect(Rect2(p + berry, Vector2(3, 3)), Color("#d94f69"))
-        draw_rect(Rect2(p + berry, Vector2(1, 1)), Color("#ff9a9e"))
-    draw_rect(Rect2(p + Vector2(-3, -12), Vector2(8, 3)), Color("#76b95a"))
+    if atlas_texture != null:
+        draw_texture_rect_region(atlas_texture, Rect2(p + Vector2(-24, -28), Vector2(48, 42)), Rect2(Vector2(96, 40), Vector2(32, 28)))
+        return
+    draw_rect(Rect2(p + Vector2(-12, -10), Vector2(24, 18)), Color("#4a9b50"))
 
 func _draw_house(p: Vector2, variant: int) -> void:
-    if houses_texture != null:
-        draw_rect(Rect2(p + Vector2(-38, 25), Vector2(76, 9)), Color(0.12, 0.2, 0.14, 0.24))
-        var house_source := Rect2(Vector2(0, 16), Vector2(64, 64)) if variant == 0 else Rect2(Vector2(0, 112), Vector2(64, 64))
-        draw_texture_rect_region(houses_texture, Rect2(p + Vector2(-42, -52), Vector2(84, 84)), house_source)
+    if atlas_texture != null:
+        draw_ellipse_shadow(p + Vector2(0, 27), Vector2(39, 7))
+        var source := Rect2(Vector2(64, 112), Vector2(64, 64)) if variant % 2 == 1 else Rect2(Vector2(0, 112), Vector2(64, 64))
+        draw_texture_rect_region(atlas_texture, Rect2(p + Vector2(-48, -67), Vector2(96, 96)), source)
         return
-    draw_rect(Rect2(p + Vector2(-33, 19), Vector2(66, 8)), Color(0.12, 0.2, 0.14, 0.24))
-    var wall: Color = Color("#e8c58a") if variant == 0 else Color("#d98f78")
-    draw_rect(Rect2(p + Vector2(-28, -12), Vector2(56, 34)), Color("#65412f"))
-    draw_rect(Rect2(p + Vector2(-25, -19), Vector2(50, 34)), wall)
-    draw_rect(Rect2(p + Vector2(-30, -28), Vector2(60, 15)), Color("#733c3d"))
-    draw_rect(Rect2(p + Vector2(-25, -34), Vector2(50, 12)), Color("#a74e49"))
-    draw_rect(Rect2(p + Vector2(-18, -31), Vector2(36, 5)), Color("#d17a62"))
-    draw_rect(Rect2(p + Vector2(-23, 9), Vector2(46, 3)), Color("#f1d29a"))
-    draw_rect(Rect2(p + Vector2(-5, -7), Vector2(10, 15)), Color("#80523b"))
-    draw_rect(Rect2(p + Vector2(-17, -11), Vector2(8, 8)), Color("#83c7d2"))
-    draw_rect(Rect2(p + Vector2(9, -11), Vector2(8, 8)), Color("#83c7d2"))
-    draw_rect(Rect2(p + Vector2(-1, -6), Vector2(2, 2)), Color("#f5d77a"))
-    draw_rect(Rect2(p + Vector2(-25, -18), Vector2(4, 23)), Color("#f3d7a4"))
-    draw_rect(Rect2(p + Vector2(21, -18), Vector2(4, 23)), Color("#c98b6e"))
-    draw_rect(Rect2(p + Vector2(-18, -27), Vector2(9, 3)), Color("#df8a70"))
-    draw_rect(Rect2(p + Vector2(9, -27), Vector2(9, 3)), Color("#df8a70"))
-    draw_rect(Rect2(p + Vector2(-22, 3), Vector2(5, 3)), Color("#fff0c9"))
+    draw_rect(Rect2(p + Vector2(-28, -19), Vector2(56, 42)), Color("#e7c58c"))
+
+func draw_ellipse_shadow(center: Vector2, size: Vector2) -> void:
+    draw_set_transform(center)
+    draw_circle(Vector2.ZERO, size.x, Color(0.12, 0.2, 0.14, 0.22))
+    draw_set_transform(Vector2.ZERO)
 
 func _draw_pig(center: Vector2) -> void:
-    if animals_texture != null:
-        var frame_x: float = 17.0 if move_vector.length() > 0.08 or move_target.x > -9000 else 0.0
-        draw_texture_rect_region(animals_texture, Rect2(center + Vector2(-22, -22), Vector2(44, 44)), Rect2(Vector2(frame_x, 0), Vector2(16, 16)))
+    if atlas_texture != null:
+        var moving := move_vector.length() > 0.08 or move_target.x > -9000
+        var frame_x := 176.0 if moving and int(animation_time * 7.0) % 2 == 1 else 144.0
+        var bob := sin(animation_time * 12.0) * 1.5 if moving else sin(animation_time * 2.2) * 0.7
+        var destination := Rect2(center + Vector2(-27, -28 + bob), Vector2(54, 54))
+        draw_texture_rect_region(atlas_texture, destination, Rect2(Vector2(frame_x, 112), Vector2(32, 32)))
         return
-    var step: int = 1 if move_vector.length() > 0.08 or move_target.x > -9000 else 0
-    var leg_shift: int = int(sin(animation_time * 13.0) * 3.0) if step == 1 else 0
-    draw_rect(Rect2(center + Vector2(-16, 14), Vector2(32, 7)), Color("#355b3d"))
-    draw_rect(Rect2(center + Vector2(-11, -3), Vector2(24, 23)), Color("#c96f82"))
-    draw_rect(Rect2(center + Vector2(-12, -8), Vector2(25, 20)), Color("#e78e9f"))
-    draw_rect(Rect2(center + Vector2(-9, -16), Vector2(20, 17)), Color("#f6b0b9"))
-    draw_rect(Rect2(center + Vector2(-7, -4), Vector2(14, 15)), Color("#f2a3af"))
-    draw_rect(Rect2(center + Vector2(-10, -18), Vector2(7, 9)), Color("#ed8998"))
-    draw_rect(Rect2(center + Vector2(4, -18), Vector2(7, 9)), Color("#ed8998"))
-    draw_rect(Rect2(center + Vector2(-8, -12), Vector2(4, 5)), Color("#ffd0d0"))
-    draw_rect(Rect2(center + Vector2(6, -12), Vector2(4, 5)), Color("#ffd0d0"))
-    draw_rect(Rect2(center + Vector2(-6, -5), Vector2(14, 8)), Color("#f7c0c4"))
-    draw_rect(Rect2(center + Vector2(-11, 3), Vector2(4, 3)), Color("#d8798a"))
-    draw_rect(Rect2(center + Vector2(8, 3), Vector2(4, 3)), Color("#d8798a"))
-    draw_rect(Rect2(center + Vector2(-3, -2), Vector2(2, 3)), Color("#a94f68"))
-    draw_rect(Rect2(center + Vector2(4, -2), Vector2(2, 3)), Color("#a94f68"))
-    draw_rect(Rect2(center + Vector2(-7, 15 + leg_shift), Vector2(6, 5)), Color("#c96f82"))
-    draw_rect(Rect2(center + Vector2(3, 15 - leg_shift), Vector2(6, 5)), Color("#c96f82"))
-    draw_rect(Rect2(center + Vector2(-13, 2), Vector2(4, 4)), Color("#f4a7b1"))
-    draw_rect(Rect2(center + Vector2(-7, 7), Vector2(13, 2)), Color("#ffd1d1"))
-    draw_rect(Rect2(center + Vector2(-12, -4), Vector2(3, 3)), Color("#fff0d9"))
-    draw_rect(Rect2(center + Vector2(7, -4), Vector2(3, 3)), Color("#fff0d9"))
-    draw_rect(Rect2(center + Vector2(-15, 17 + leg_shift), Vector2(5, 3)), Color("#f1a0ad"))
-    draw_rect(Rect2(center + Vector2(5, 17 - leg_shift), Vector2(5, 3)), Color("#f1a0ad"))
-    draw_rect(Rect2(center + Vector2(11, 8), Vector2(5, 3)), Color("#d8798a"))
-    draw_rect(Rect2(center + Vector2(15, 6), Vector2(3, 3)), Color("#e78e9f"))
-
-
-func _draw_farmer(p: Vector2) -> void:
-    if player_texture == null:
-        return
-    var frame := Rect2(Vector2(0, 0), Vector2(21, 18))
-    draw_texture_rect_region(player_texture, Rect2(p + Vector2(-18, -24), Vector2(36, 36)), frame)
+    draw_rect(Rect2(center + Vector2(-14, -10), Vector2(28, 24)), Color("#e58d9b"))
 
 func _draw_farm_patch(camera_offset: Vector2) -> void:
     var origin := Vector2(-18, 132) - camera_offset
-    draw_rect(Rect2(origin + Vector2(-8, -8), Vector2(104, 76)), Color("#bd9861"))
-    draw_rect(Rect2(origin + Vector2(-8, -8), Vector2(104, 4)), Color("#e0bf83"))
+    draw_rect(Rect2(origin + Vector2(-10, -10), Vector2(116, 88)), Color("#d9bd7d"))
     for row in range(3):
         for col in range(4):
-            var cell := origin + Vector2(float(col) * 24.0, float(row) * 22.0)
-            draw_rect(Rect2(cell, Vector2(20, 17)), Color("#8d5b3d"))
-            draw_rect(Rect2(cell + Vector2(2, 3), Vector2(16, 2)), Color("#b77b4e"))
-            draw_line(cell + Vector2(5, 7), cell + Vector2(5, 15), Color("#70452f"), 1.0)
-            draw_line(cell + Vector2(13, 7), cell + Vector2(13, 15), Color("#70452f"), 1.0)
-            var grow := 4.0 + float((row + col) % 3) * 2.0
-            draw_line(cell + Vector2(10, 9), cell + Vector2(10, 9 - grow), Color("#367b43"), 2.0)
-            draw_line(cell + Vector2(10, 7), cell + Vector2(5, 4 - grow * 0.25), Color("#56a94e"), 2.0)
-            draw_line(cell + Vector2(10, 7), cell + Vector2(15, 4 - grow * 0.25), Color("#6abb56"), 2.0)
-            if (row + col) % 2 == 0:
-                draw_circle(cell + Vector2(10, 5 - grow * 0.25), 2.0, Color("#f2c75d"))
+            var cell := origin + Vector2(float(col) * 25.0, float(row) * 24.0)
+            if atlas_texture != null:
+                draw_texture_rect_region(atlas_texture, Rect2(cell, Vector2(24, 24)), Rect2(Vector2(80, 0), Vector2(16, 16)))
+                var crop_x := 96.0 if (row + col) % 2 == 0 else 112.0
+                draw_texture_rect_region(atlas_texture, Rect2(cell + Vector2(2, -8), Vector2(20, 22)), Rect2(Vector2(crop_x, 0), Vector2(16, 16)))
+            else:
+                draw_rect(Rect2(cell, Vector2(20, 17)), Color("#96613f"))
 
 func _draw_fence(camera_offset: Vector2) -> void:
-    for i in range(13):
-        var p := Vector2(-250.0 + float(i) * 38.0, -178.0) - camera_offset
-        if p.x < -20 or p.x > view_size.x + 20:
+    for i in range(15):
+        var p := Vector2(-270.0 + float(i) * 32.0, -178.0) - camera_offset
+        if p.x < -36 or p.x > view_size.x + 36:
             continue
-        draw_rect(Rect2(p + Vector2(-3, -1), Vector2(7, 25)), Color("#765038"))
-        draw_rect(Rect2(p + Vector2(-4, 1), Vector2(4, 5)), Color("#d4a16a"))
-        draw_rect(Rect2(p + Vector2(-4, 11), Vector2(4, 4)), Color("#b47a4d"))
-    var left := Vector2(-250, -166) - camera_offset
-    var right := Vector2(206, -166) - camera_offset
-    draw_rect(Rect2(left, Vector2(right.x - left.x + 4, 5)), Color("#9c6a43"))
-    draw_rect(Rect2(left + Vector2(0, 12), Vector2(right.x - left.x + 4, 5)), Color("#9c6a43"))
+        if atlas_texture != null:
+            draw_texture_rect_region(atlas_texture, Rect2(p, Vector2(48, 24)), Rect2(Vector2(208, 112), Vector2(32, 16)))
+        else:
+            draw_rect(Rect2(p, Vector2(32, 5)), Color("#9a6945"))
 
 func _draw_joystick() -> void:
     var base: Vector2 = Vector2(68, view_size.y - 78)
