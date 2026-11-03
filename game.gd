@@ -1,351 +1,364 @@
-extends Node3D
+extends Node2D
 
-const PIG_SPEED := 6.0
-const JUMP_VELOCITY := 7.5
-const WORLD_LIMIT := 48.0
+const VIEW_SIZE := Vector2(480, 270)
+const TILE := 24.0
+const ISLAND_RADIUS := Vector2(760.0, 570.0)
+const PLAYER_SPEED := 112.0
+const SAVE_PATH := "user://piggyworld_save.cfg"
 
-var pig: CharacterBody3D
-var camera: Camera3D
-var joystick_touch := -1
-var joystick_origin := Vector2.ZERO
-var joystick_vector := Vector2.ZERO
-var jump_requested := false
-var coins := 0
-var coin_nodes: Array[Node3D] = []
-var coin_label: Label
-var hint_label: Label
-var audio_player: AudioStreamPlayer
+var player_pos: Vector2 = Vector2.ZERO
+var facing: Vector2 = Vector2.DOWN
+var move_vector: Vector2 = Vector2.ZERO
+var joystick_vector: Vector2 = Vector2.ZERO
+var joystick_touch: int = -1
+var joystick_origin: Vector2 = Vector2.ZERO
+var move_target: Vector2 = Vector2(-9999, -9999)
+var animation_time: float = 0.0
+var wood: int = 0
+var stone: int = 0
+var berries: int = 0
+var coins: int = 0
+var world_objects: Array[Dictionary] = []
+var inventory_label: Label
+var message_label: Label
+var action_button: Button
+var save_timer: float = 0.0
 
 func _ready() -> void:
-    randomize()
-    _build_world()
-    _build_player()
+    _configure_pixel_view()
+    _load_game()
+    if world_objects.is_empty():
+        _generate_world()
     _build_ui()
-    _setup_audio()
+    queue_redraw()
+
+func _configure_pixel_view() -> void:
+    get_viewport().transparent_bg = false
+    get_viewport().canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 
 func _process(delta: float) -> void:
-    if is_instance_valid(pig):
-        camera.global_position = camera.global_position.lerp(
-            pig.global_position + Vector3(0, 7.5, 11.5), min(delta * 4.0, 1.0))
-        camera.look_at(pig.global_position + Vector3(0, 1.2, 0), Vector3.UP)
-    for c in coin_nodes:
-        if is_instance_valid(c):
-            c.rotate_y(delta * 2.2)
-    _check_coin_pickups()
+    animation_time += delta
+    var keyboard: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+    move_vector = joystick_vector if joystick_vector.length() > 0.12 else keyboard
+    if move_vector.length() > 0.08:
+        move_vector = move_vector.normalized()
+        facing = move_vector
+        player_pos += move_vector * PLAYER_SPEED * delta
+        move_target = Vector2(-9999, -9999)
+    elif move_target.x > -9000:
+        var difference: Vector2 = move_target - player_pos
+        if difference.length() > 5.0:
+            facing = difference.normalized()
+            player_pos += facing * min(PLAYER_SPEED * delta, difference.length())
+        else:
+            move_target = Vector2(-9999, -9999)
+    var normalized_pos: Vector2 = Vector2(player_pos.x / ISLAND_RADIUS.x, player_pos.y / ISLAND_RADIUS.y)
+    if normalized_pos.length() > 0.94:
+        player_pos = normalized_pos.normalized() * Vector2(ISLAND_RADIUS.x * 0.94, ISLAND_RADIUS.y * 0.94)
+    save_timer += delta
+    if save_timer > 20.0:
+        save_timer = 0.0
+        _save_game()
+    queue_redraw()
 
-func _physics_process(delta: float) -> void:
-    if pig == null:
-        return
-    var input_dir := Vector2(
-        Input.get_action_strength("move_right") - Input.get_action_strength("move_left"),
-        Input.get_action_strength("move_back") - Input.get_action_strength("move_forward")
-    )
-    if joystick_vector.length() > 0.08:
-        input_dir = joystick_vector
-    input_dir = input_dir.limit_length(1.0)
-    var direction := Vector3(input_dir.x, 0, input_dir.y)
-    if direction.length() > 0.05:
-        pig.velocity.x = direction.x * PIG_SPEED
-        pig.velocity.z = direction.z * PIG_SPEED
-        pig.rotation.y = lerp_angle(pig.rotation.y, atan2(direction.x, direction.z), delta * 10.0)
-    else:
-        pig.velocity.x = move_toward(pig.velocity.x, 0.0, PIG_SPEED * 5.0 * delta)
-        pig.velocity.z = move_toward(pig.velocity.z, 0.0, PIG_SPEED * 5.0 * delta)
-    if not pig.is_on_floor():
-        pig.velocity.y -= 20.0 * delta
-    elif jump_requested or Input.is_action_just_pressed("jump"):
-        pig.velocity.y = JUMP_VELOCITY
-        _play_sound("jump")
-    jump_requested = false
-    pig.move_and_slide()
-    pig.global_position.x = clamp(pig.global_position.x, -WORLD_LIMIT, WORLD_LIMIT)
-    pig.global_position.z = clamp(pig.global_position.z, -WORLD_LIMIT, WORLD_LIMIT)
+func _unhandled_input(event: InputEvent) -> void:
+    if event is InputEventScreenTouch:
+        if event.pressed:
+            if event.position.x < 145.0 and event.position.y > 135.0:
+                joystick_touch = event.index
+                joystick_origin = event.position
+                joystick_vector = Vector2.ZERO
+            else:
+                var camera_offset: Vector2 = player_pos - VIEW_SIZE * 0.5
+                move_target = event.position + camera_offset
+        elif event.index == joystick_touch:
+            joystick_touch = -1
+            joystick_vector = Vector2.ZERO
+    elif event is InputEventScreenDrag and event.index == joystick_touch:
+        joystick_vector = ((event.position - joystick_origin) / 38.0).limit_length(1.0)
 
-func _build_world() -> void:
-    var world_env := WorldEnvironment.new()
-    var env := Environment.new()
-    env.background_mode = Environment.BG_SKY
-    env.sky = Sky.new()
-    env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    env.ambient_light_color = Color(0.75, 0.82, 0.95)
-    env.ambient_light_energy = 0.8
-    env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-    world_env.environment = env
-    add_child(world_env)
-
-    var sun := DirectionalLight3D.new()
-    sun.rotation_degrees = Vector3(-52, -30, 0)
-    sun.light_energy = 1.25
-    sun.shadow_enabled = true
-    add_child(sun)
-
-    _add_box(self, Vector3(0, -0.55, 0), Vector3(110, 1, 110), Color(0.35, 0.68, 0.27), true)
-    # Winding paths
-    for i in range(8):
-        var z := -35.0 + i * 10.0
-        _add_box(self, Vector3(0, -0.02, z), Vector3(8, 0.08, 5), Color(0.78, 0.65, 0.43), false)
-    # Pond
-    _make_cylinder(self, Vector3(22, -0.02, -15), Vector2(8, 0.12), Color(0.2, 0.65, 0.88), false)
-    # Trees in clusters
-    for i in range(42):
-        var x := randf_range(-43, 43)
-        var z := randf_range(-43, 43)
-        if Vector2(x, z).length() < 12.0 or (abs(x) < 6 and abs(z) < 40):
+func _generate_world() -> void:
+    world_objects.clear()
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 824671
+    for i in range(105):
+        var p := Vector2(rng.randf_range(-690.0, 690.0), rng.randf_range(-500.0, 500.0))
+        if Vector2(p.x / ISLAND_RADIUS.x, p.y / ISLAND_RADIUS.y).length() > 0.83:
             continue
-        _make_tree(Vector3(x, 0, z))
-    # Little farm houses
-    _make_house(Vector3(-19, 0, -18), Color(0.93, 0.72, 0.42))
-    _make_house(Vector3(18, 0, 25), Color(0.82, 0.48, 0.39))
-    _make_house(Vector3(-31, 0, 22), Color(0.62, 0.73, 0.9))
-    # Rocks and fences
-    for i in range(18):
-        var rock := _make_sphere(self, Vector3(randf_range(-42,42), 0.35, randf_range(-42,42)),
-            Vector3(randf_range(0.4,0.9), randf_range(0.3,0.7), randf_range(0.4,0.9)),
-            Color(0.48,0.5,0.48), true)
-    for i in range(9):
-        _add_box(self, Vector3(-8 + i * 2, 0.55, -9), Vector3(0.16,1.1,0.16), Color(0.48,0.27,0.12), true)
-    # Coins
-    for i in range(24):
-        var p := Vector3(randf_range(-38,38), 0.9, randf_range(-38,38))
-        if Vector2(p.x,p.z).length() < 7: p.x += 13
-        var coin := _make_coin(p)
-        coin_nodes.append(coin)
+        if p.length() < 115.0:
+            continue
+        var kind: String = "tree"
+        var roll: float = rng.randf()
+        if roll < 0.22:
+            kind = "rock"
+        elif roll < 0.34:
+            kind = "bush"
+        world_objects.append({"kind": kind, "pos": p, "variant": rng.randi_range(0, 3)})
+    world_objects.append({"kind": "house", "pos": Vector2(-85, -55), "variant": 0})
+    world_objects.append({"kind": "house", "pos": Vector2(155, 105), "variant": 1})
+    _save_game()
 
-func _build_player() -> void:
-    pig = CharacterBody3D.new()
-    pig.name = "Pig"
-    pig.position = Vector3(0, 0.15, 0)
-    add_child(pig)
-    var collider := CollisionShape3D.new()
-    var shape := CapsuleShape3D.new()
-    shape.radius = 0.62
-    shape.height = 1.8
-    collider.shape = shape
-    collider.position.y = 0.9
-    pig.add_child(collider)
+func _draw() -> void:
+    var camera_offset: Vector2 = player_pos - VIEW_SIZE * 0.5
+    draw_rect(Rect2(Vector2.ZERO, VIEW_SIZE), Color("#397fa0"))
+    _draw_water(camera_offset)
+    var min_x: int = floori(camera_offset.x / TILE) - 1
+    var max_x: int = ceili((camera_offset.x + VIEW_SIZE.x) / TILE) + 1
+    var min_y: int = floori(camera_offset.y / TILE) - 1
+    var max_y: int = ceili((camera_offset.y + VIEW_SIZE.y) / TILE) + 1
+    for ty in range(min_y, max_y):
+        for tx in range(min_x, max_x):
+            var world: Vector2 = Vector2(tx * TILE, ty * TILE)
+            var center: Vector2 = world + Vector2(TILE * 0.5, TILE * 0.5)
+            var normalized: Vector2 = Vector2(center.x / ISLAND_RADIUS.x, center.y / ISLAND_RADIUS.y)
+            var distance: float = normalized.length()
+            var screen: Vector2 = world - camera_offset
+            if distance <= 1.035:
+                var color: Color
+                if distance > 0.965:
+                    color = Color("#d8bd79")
+                else:
+                    var variation: int = absi(tx * 92821 + ty * 68917) % 5
+                    var greens: Array[Color] = [Color("#65ad55"), Color("#6db65b"), Color("#5fa44e"), Color("#74ba60"), Color("#68ae55")]
+                    color = greens[variation]
+                draw_rect(Rect2(screen, Vector2(TILE + 1, TILE + 1)), color)
+                if distance < 0.95:
+                    _draw_ground_detail(screen, tx, ty)
+    _draw_path(camera_offset)
+    for i in range(world_objects.size()):
+        var item: Dictionary = world_objects[i]
+        var screen_pos: Vector2 = item["pos"] - camera_offset
+        if screen_pos.x < -45 or screen_pos.x > VIEW_SIZE.x + 45 or screen_pos.y < -60 or screen_pos.y > VIEW_SIZE.y + 60:
+            continue
+        match String(item["kind"]):
+            "tree":
+                _draw_tree(screen_pos, int(item["variant"]))
+            "rock":
+                _draw_rock(screen_pos, int(item["variant"]))
+            "bush":
+                _draw_bush(screen_pos)
+            "house":
+                _draw_house(screen_pos, int(item["variant"]))
+    _draw_pig(VIEW_SIZE * 0.5)
+    _draw_joystick()
 
-    var body := _make_sphere(pig, Vector3(0,0.95,0), Vector3(0.72,0.68,0.95), Color(1.0,0.48,0.58), false)
-    _make_sphere(pig, Vector3(0,1.55,-0.48), Vector3(0.57,0.56,0.56), Color(1.0,0.55,0.63), false)
-    # Snout
-    _make_sphere(pig, Vector3(0,1.42,0.05), Vector3(0.38,0.25,0.22), Color(1.0,0.68,0.72), false)
-    _make_sphere(pig, Vector3(-0.14,1.43,0.245), Vector3(0.055,0.09,0.035), Color(0.35,0.12,0.16), false)
-    _make_sphere(pig, Vector3(0.14,1.43,0.245), Vector3(0.055,0.09,0.035), Color(0.35,0.12,0.16), false)
-    # Eyes
-    for x in [-0.22,0.22]:
-        _make_sphere(pig, Vector3(x,1.68,-0.02), Vector3(0.075,0.09,0.06), Color(0.12,0.08,0.08), false)
-        _make_sphere(pig, Vector3(x*1.45,2.0,-0.58), Vector3(0.19,0.3,0.12), Color(1.0,0.48,0.58), false)
-    # Legs
-    for x in [-0.42,0.42]:
-        for z in [-0.55,0.55]:
-            _make_cylinder(pig, Vector3(x,0.38,z), Vector2(0.16,0.48), Color(0.91,0.35,0.45), false)
-    # Tail curl
-    var tail := _make_cylinder(pig, Vector3(0,1.05,-0.96), Vector2(0.07,0.42), Color(1.0,0.48,0.58), false)
-    tail.rotation.x = PI/2
-    camera = Camera3D.new()
-    camera.position = Vector3(0,7.5,11.5)
-    camera.fov = 68
-    add_child(camera)
-    camera.current = true
-    camera.look_at(pig.global_position + Vector3(0,1,0), Vector3.UP)
+func _draw_water(camera_offset: Vector2) -> void:
+    for y in range(-1, 12):
+        for x in range(-1, 22):
+            var p: Vector2 = Vector2(x * 32.0, y * 32.0)
+            var n: int = absi(x * 73129 + y * 19391) % 4
+            var blues: Array[Color] = [Color("#397fa0"), Color("#3c85a5"), Color("#36799a"), Color("#4289a8")]
+            draw_rect(Rect2(p - camera_offset * 0.12, Vector2(32, 32)), blues[n])
+            if n == 1:
+                draw_rect(Rect2(p + Vector2(9, 12) - camera_offset * 0.12, Vector2(7, 2)), Color("#72b5c3"))
+
+func _draw_ground_detail(screen: Vector2, tx: int, ty: int) -> void:
+    var seed_value: int = absi(tx * 19349663 + ty * 83492791)
+    if seed_value % 7 == 0:
+        draw_rect(Rect2(screen + Vector2(5 + seed_value % 11, 6 + seed_value % 9), Vector2(3, 3)), Color("#a2ce72"))
+    elif seed_value % 13 == 0:
+        draw_rect(Rect2(screen + Vector2(8, 15), Vector2(2, 5)), Color("#e8d78a"))
+        draw_rect(Rect2(screen + Vector2(6, 16), Vector2(6, 2)), Color("#e8d78a"))
+
+func _draw_path(camera_offset: Vector2) -> void:
+    for x in range(-34, 35):
+        var world_x: float = float(x) * 24.0
+        var world_y: float = sin(world_x / 155.0) * 82.0 + 58.0
+        var screen: Vector2 = Vector2(world_x, world_y) - camera_offset
+        if screen.x > -24 and screen.x < VIEW_SIZE.x + 24 and screen.y > -24 and screen.y < VIEW_SIZE.y + 24:
+            draw_rect(Rect2(screen, Vector2(24, 24)), Color("#c9a66b"))
+            draw_rect(Rect2(screen + Vector2(4, 5), Vector2(3, 2)), Color("#e0c18a"))
+
+func _draw_tree(p: Vector2, variant: int) -> void:
+    draw_rect(Rect2(p + Vector2(-9, 4), Vector2(19, 7)), Color("#3f7442"))
+    draw_rect(Rect2(p + Vector2(-4, -13), Vector2(9, 23)), Color("#79502e"))
+    draw_rect(Rect2(p + Vector2(-17, -34), Vector2(34, 25)), Color("#286c42"))
+    draw_rect(Rect2(p + Vector2(-13, -39), Vector2(26, 25)), Color("#39864b"))
+    draw_rect(Rect2(p + Vector2(-7, -43), Vector2(15, 12)), Color("#4c9b53"))
+    draw_rect(Rect2(p + Vector2(-12, -29), Vector2(7, 6)), Color("#62ad5a"))
+    if variant % 2 == 0:
+        draw_rect(Rect2(p + Vector2(5, -22), Vector2(6, 5)), Color("#74b95d"))
+
+func _draw_rock(p: Vector2, variant: int) -> void:
+    draw_rect(Rect2(p + Vector2(-12, -3), Vector2(25, 12)), Color("#668078"))
+    draw_rect(Rect2(p + Vector2(-9, -9), Vector2(19, 12)), Color("#8fa49a"))
+    draw_rect(Rect2(p + Vector2(-5, -12), Vector2(10, 5)), Color("#b2c1b2"))
+    if variant % 2 == 0:
+        draw_rect(Rect2(p + Vector2(3, -4), Vector2(4, 3)), Color("#d0d6c8"))
+
+func _draw_bush(p: Vector2) -> void:
+    draw_rect(Rect2(p + Vector2(-12, -3), Vector2(25, 10)), Color("#347844"))
+    draw_rect(Rect2(p + Vector2(-9, -10), Vector2(19, 13)), Color("#4b9b50"))
+    for berry in [Vector2(-5, -5), Vector2(4, -7), Vector2(7, 0)]:
+        draw_rect(Rect2(p + berry, Vector2(3, 3)), Color("#d94f69"))
+
+func _draw_house(p: Vector2, variant: int) -> void:
+    var wall: Color = Color("#e8c58a") if variant == 0 else Color("#d98f78")
+    draw_rect(Rect2(p + Vector2(-24, -15), Vector2(48, 28)), Color("#85543d"))
+    draw_rect(Rect2(p + Vector2(-22, -18), Vector2(44, 26)), wall)
+    draw_rect(Rect2(p + Vector2(-27, -25), Vector2(54, 12)), Color("#9c5147"))
+    draw_rect(Rect2(p + Vector2(-22, -30), Vector2(44, 7)), Color("#bd6653"))
+    draw_rect(Rect2(p + Vector2(-5, -7), Vector2(10, 15)), Color("#80523b"))
+    draw_rect(Rect2(p + Vector2(-17, -11), Vector2(8, 8)), Color("#83c7d2"))
+    draw_rect(Rect2(p + Vector2(9, -11), Vector2(8, 8)), Color("#83c7d2"))
+    draw_rect(Rect2(p + Vector2(-1, -6), Vector2(2, 2)), Color("#f5d77a"))
+
+func _draw_pig(center: Vector2) -> void:
+    var step: int = 1 if move_vector.length() > 0.08 or move_target.x > -9000 else 0
+    var leg_shift: int = int(sin(animation_time * 13.0) * 3.0) if step == 1 else 0
+    draw_rect(Rect2(center + Vector2(-13, 13), Vector2(27, 5)), Color("#3e7045"))
+    draw_rect(Rect2(center + Vector2(-10, -5), Vector2(21, 23)), Color("#e88b9a"))
+    draw_rect(Rect2(center + Vector2(-8, -13), Vector2(19, 17)), Color("#f4a7b1"))
+    draw_rect(Rect2(center + Vector2(-10, -18), Vector2(7, 9)), Color("#ed8998"))
+    draw_rect(Rect2(center + Vector2(4, -18), Vector2(7, 9)), Color("#ed8998"))
+    draw_rect(Rect2(center + Vector2(-8, -12), Vector2(4, 5)), Color("#ffd0d0"))
+    draw_rect(Rect2(center + Vector2(6, -12), Vector2(4, 5)), Color("#ffd0d0"))
+    draw_rect(Rect2(center + Vector2(-5, -4), Vector2(12, 7)), Color("#f7c0c4"))
+    draw_rect(Rect2(center + Vector2(-3, -2), Vector2(2, 3)), Color("#a94f68"))
+    draw_rect(Rect2(center + Vector2(4, -2), Vector2(2, 3)), Color("#a94f68"))
+    draw_rect(Rect2(center + Vector2(-7, 15 + leg_shift), Vector2(6, 5)), Color("#c96f82"))
+    draw_rect(Rect2(center + Vector2(3, 15 - leg_shift), Vector2(6, 5)), Color("#c96f82"))
+    draw_rect(Rect2(center + Vector2(-13, 2), Vector2(4, 4)), Color("#f4a7b1"))
+
+func _draw_joystick() -> void:
+    draw_circle(Vector2(63, 215), 31, Color(0.08, 0.16, 0.17, 0.48))
+    draw_circle(Vector2(63, 215), 25, Color(0.78, 0.9, 0.75, 0.3))
+    var knob: Vector2 = Vector2(63, 215) + joystick_vector * 15.0
+    draw_circle(knob, 10, Color("#f2e7c7"))
 
 func _build_ui() -> void:
     var layer := CanvasLayer.new()
     add_child(layer)
     var panel := PanelContainer.new()
-    panel.position = Vector2(18,18)
-    panel.add_theme_stylebox_override("panel", _panel_style(Color(0.08,0.12,0.15,0.72)))
+    panel.position = Vector2(8, 7)
+    panel.add_theme_stylebox_override("panel", _style(Color("#263f39"), 8))
     layer.add_child(panel)
-    var v := VBoxContainer.new()
-    panel.add_child(v)
-    coin_label = Label.new()
-    coin_label.text = "🪙  Монеты: 0 / 24"
-    coin_label.add_theme_font_size_override("font_size", 25)
-    v.add_child(coin_label)
-    hint_label = Label.new()
-    hint_label.text = "Исследуй остров и собирай монеты!"
-    hint_label.add_theme_font_size_override("font_size", 17)
-    v.add_child(hint_label)
+    var column := VBoxContainer.new()
+    column.add_theme_constant_override("separation", 1)
+    panel.add_child(column)
+    var title := Label.new()
+    title.text = "PIGGY ISLAND"
+    title.add_theme_color_override("font_color", Color("#f6e8b8"))
+    title.add_theme_font_size_override("font_size", 12)
+    column.add_child(title)
+    inventory_label = Label.new()
+    inventory_label.add_theme_color_override("font_color", Color.WHITE)
+    inventory_label.add_theme_font_size_override("font_size", 10)
+    column.add_child(inventory_label)
+    message_label = Label.new()
+    message_label.text = "Собирай ресурсы и обустрой остров!"
+    message_label.position = Vector2(8, 54)
+    message_label.add_theme_color_override("font_color", Color("#fff3c8"))
+    message_label.add_theme_font_size_override("font_size", 10)
+    layer.add_child(message_label)
+    action_button = _make_button("СОБРАТЬ", Vector2(365, 207), Vector2(105, 28))
+    action_button.pressed.connect(_interact)
+    layer.add_child(action_button)
+    var build_button := _make_button("ПОСТРОИТЬ", Vector2(365, 174), Vector2(105, 28))
+    build_button.pressed.connect(_build_small_house)
+    layer.add_child(build_button)
+    var help := Label.new()
+    help.text = "WASD / джойстик • E — действие"
+    help.position = Vector2(8, 252)
+    help.add_theme_font_size_override("font_size", 8)
+    help.add_theme_color_override("font_color", Color("#f8f1d9"))
+    layer.add_child(help)
+    _refresh_inventory()
 
-    var controls := Label.new()
-    controls.anchor_left = 0.0
-    controls.anchor_top = 1.0
-    controls.anchor_bottom = 1.0
-    controls.position = Vector2(24,-58)
-    controls.text = "ПК: WASD — движение   ПРОБЕЛ — прыжок     Телефон: слева — движение, справа — прыжок"
-    controls.add_theme_font_size_override("font_size", 16)
-    controls.add_theme_color_override("font_color", Color.WHITE)
-    layer.add_child(controls)
+func _make_button(text_value: String, pos: Vector2, button_size: Vector2) -> Button:
+    var button := Button.new()
+    button.text = text_value
+    button.position = pos
+    button.size = button_size
+    button.add_theme_font_size_override("font_size", 10)
+    button.add_theme_color_override("font_color", Color("#fff4d6"))
+    button.add_theme_stylebox_override("normal", _style(Color("#527b55"), 7))
+    button.add_theme_stylebox_override("hover", _style(Color("#68965e"), 7))
+    button.add_theme_stylebox_override("pressed", _style(Color("#365c45"), 7))
+    return button
 
-    var jump := Button.new()
-    jump.text = "ПРЫЖОК"
-    jump.anchor_left = 1.0
-    jump.anchor_top = 1.0
-    jump.anchor_right = 1.0
-    jump.anchor_bottom = 1.0
-    jump.position = Vector2(-168,-138)
-    jump.size = Vector2(142,92)
-    jump.add_theme_font_size_override("font_size", 21)
-    jump.button_down.connect(func(): jump_requested = true)
-    layer.add_child(jump)
+func _style(color: Color, radius: int) -> StyleBoxFlat:
+    var style := StyleBoxFlat.new()
+    style.bg_color = color
+    style.set_corner_radius_all(radius)
+    style.content_margin_left = 7
+    style.content_margin_right = 7
+    style.content_margin_top = 4
+    style.content_margin_bottom = 4
+    style.border_width_bottom = 2
+    style.border_color = color.darkened(0.28)
+    return style
 
-    var joystick := Label.new()
-    joystick.text = "◉"
-    joystick.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    joystick.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    joystick.anchor_left = 0.0
-    joystick.anchor_top = 1.0
-    joystick.anchor_bottom = 1.0
-    joystick.position = Vector2(30,-150)
-    joystick.size = Vector2(125,125)
-    joystick.add_theme_font_size_override("font_size", 66)
-    joystick.add_theme_color_override("font_color", Color(1,1,1,0.7))
-    layer.add_child(joystick)
+func _interact() -> void:
+    var nearest_index: int = -1
+    var nearest_distance: float = 58.0
+    for i in range(world_objects.size()):
+        var item: Dictionary = world_objects[i]
+        var kind: String = String(item["kind"])
+        if kind == "house":
+            continue
+        var distance: float = player_pos.distance_to(item["pos"])
+        if distance < nearest_distance:
+            nearest_distance = distance
+            nearest_index = i
+    if nearest_index == -1:
+        _show_message("Подойди ближе к дереву, камню или кусту")
+        return
+    var target: Dictionary = world_objects[nearest_index]
+    match String(target["kind"]):
+        "tree":
+            wood += 3
+            _show_message("+3 дерева")
+        "rock":
+            stone += 2
+            _show_message("+2 камня")
+        "bush":
+            berries += 2
+            _show_message("+2 ягоды")
+    world_objects.remove_at(nearest_index)
+    _refresh_inventory()
+    _save_game()
+    queue_redraw()
 
-func _input(event: InputEvent) -> void:
-    if event is InputEventScreenTouch:
-        if event.pressed:
-            if event.position.x < get_viewport().get_visible_rect().size.x * 0.55:
-                joystick_touch = event.index
-                joystick_origin = event.position
-                joystick_vector = Vector2.ZERO
-            else:
-                jump_requested = true
-        elif event.index == joystick_touch:
-            joystick_touch = -1
-            joystick_vector = Vector2.ZERO
-    elif event is InputEventScreenDrag and event.index == joystick_touch:
-        var drag_delta: Vector2 = (event.position - joystick_origin) / 65.0
-        joystick_vector = Vector2(drag_delta.x, drag_delta.y).limit_length(1.0)
+func _build_small_house() -> void:
+    if wood < 12 or stone < 5:
+        _show_message("Нужно 12 дерева и 5 камня")
+        return
+    wood -= 12
+    stone -= 5
+    world_objects.append({"kind": "house", "pos": player_pos + Vector2(42, 8), "variant": 1})
+    _refresh_inventory()
+    _show_message("Новый дом построен!")
+    _save_game()
+    queue_redraw()
 
-func _check_coin_pickups() -> void:
-    for c in coin_nodes:
-        if is_instance_valid(c) and pig.global_position.distance_to(c.global_position) < 1.45:
-            c.queue_free()
-            coins += 1
-            coin_label.text = "🪙  Монеты: %d / 24" % coins
-            _play_sound("coin")
-            if coins == 24:
-                hint_label.text = "Ура! Все монеты собраны! Ты настоящий чемпион!"
-            elif coins == 8:
-                hint_label.text = "Отлично! Продолжай исследовать мир!"
+func _show_message(value: String) -> void:
+    if is_instance_valid(message_label):
+        message_label.text = value
 
-func _make_tree(pos: Vector3) -> void:
-    _make_cylinder(self, pos + Vector3(0,1.0,0), Vector2(0.22,2.0), Color(0.38,0.22,0.12), true)
-    var green: Color = [Color(0.16,0.52,0.2), Color(0.22,0.62,0.24), Color(0.32,0.68,0.28)][randi()%3]
-    _make_sphere(self, pos + Vector3(0,2.45,0), Vector3(1.15,1.35,1.1), green, true)
-    _make_sphere(self, pos + Vector3(-0.55,2.0,0.1), Vector3(0.75,0.85,0.75), green, true)
+func _refresh_inventory() -> void:
+    if is_instance_valid(inventory_label):
+        inventory_label.text = "🪵 %d   камень %d\n🍓 %d   🪙 %d" % [wood, stone, berries, coins]
 
-func _make_house(pos: Vector3, color: Color) -> void:
-    _add_box(self, pos + Vector3(0,1.5,0), Vector3(5,3,4), color, true)
-    var roof := _add_box(self, pos + Vector3(0,3.55,0), Vector3(5.8,0.45,4.8), Color(0.55,0.2,0.16), true)
-    roof.rotation.z = 0.0
-    _add_box(self, pos + Vector3(0,0.9,2.03), Vector3(1.0,1.8,0.12), Color(0.35,0.18,0.1), false)
-    for x in [-1.45,1.45]:
-        _add_box(self, pos + Vector3(x,1.9,2.06), Vector3(0.8,0.8,0.1), Color(0.55,0.82,0.96), false)
+func _save_game() -> void:
+    var config := ConfigFile.new()
+    config.set_value("player", "position", player_pos)
+    config.set_value("inventory", "wood", wood)
+    config.set_value("inventory", "stone", stone)
+    config.set_value("inventory", "berries", berries)
+    config.set_value("inventory", "coins", coins)
+    config.set_value("world", "objects", world_objects)
+    config.save(SAVE_PATH)
 
-func _make_coin(pos: Vector3) -> Node3D:
-    var n := Node3D.new()
-    n.position = pos
-    add_child(n)
-    var mesh := MeshInstance3D.new()
-    var cylinder := CylinderMesh.new()
-    cylinder.top_radius = 0.42
-    cylinder.bottom_radius = 0.42
-    cylinder.height = 0.12
-    mesh.mesh = cylinder
-    mesh.rotation.x = PI/2
-    mesh.material_override = _mat(Color(1.0,0.76,0.12), 0.7, 0.25)
-    n.add_child(mesh)
-    var glow := OmniLight3D.new()
-    glow.light_color = Color(1.0,0.75,0.2)
-    glow.light_energy = 0.35
-    glow.omni_range = 2.5
-    n.add_child(glow)
-    return n
-
-func _make_sphere(parent: Node, pos: Vector3, scale: Vector3, color: Color, collision: bool) -> MeshInstance3D:
-    var m := MeshInstance3D.new()
-    var s := SphereMesh.new()
-    s.radius = 0.5
-    s.height = 1.0
-    m.mesh = s
-    m.position = pos
-    m.scale = scale
-    m.material_override = _mat(color)
-    parent.add_child(m)
-    return m
-
-func _make_cylinder(parent: Node, pos: Vector3, dims: Vector2, color: Color, collision: bool) -> MeshInstance3D:
-    var m := MeshInstance3D.new()
-    var c := CylinderMesh.new()
-    c.top_radius = dims.x
-    c.bottom_radius = dims.x
-    c.height = dims.y
-    m.mesh = c
-    m.position = pos
-    m.material_override = _mat(color)
-    parent.add_child(m)
-    return m
-
-func _add_box(parent: Node, pos: Vector3, size: Vector3, color: Color, collision: bool) -> MeshInstance3D:
-    var m := MeshInstance3D.new()
-    var b := BoxMesh.new()
-    b.size = size
-    m.mesh = b
-    m.position = pos
-    m.material_override = _mat(color)
-    parent.add_child(m)
-    if collision:
-        var body := StaticBody3D.new()
-        body.position = pos
-        parent.add_child(body)
-        var col := CollisionShape3D.new()
-        var shape := BoxShape3D.new()
-        shape.size = size
-        col.shape = shape
-        body.add_child(col)
-    return m
-
-func _mat(color: Color, metallic := 0.0, roughness := 0.85) -> StandardMaterial3D:
-    var m := StandardMaterial3D.new()
-    m.albedo_color = color
-    m.metallic = metallic
-    m.roughness = roughness
-    return m
-
-func _panel_style(color: Color) -> StyleBoxFlat:
-    var s := StyleBoxFlat.new()
-    s.bg_color = color
-    s.set_corner_radius_all(14)
-    s.content_margin_left = 14
-    s.content_margin_right = 14
-    s.content_margin_top = 8
-    s.content_margin_bottom = 8
-    return s
-
-func _setup_audio() -> void:
-    audio_player = AudioStreamPlayer.new()
-    add_child(audio_player)
-    # Short original tones generated in-game: no external audio assets required.
-
-func _play_sound(kind: String) -> void:
-    var sample_rate := 22050
-    var duration := 0.16 if kind == "coin" else 0.22
-    var frequency := 880.0 if kind == "coin" else 330.0
-    var data := PackedByteArray()
-    var count := int(sample_rate * duration)
-    for i in range(count):
-        var t := float(i) / sample_rate
-        var envelope := (1.0 - float(i) / count)
-        var freq := frequency * (1.0 + (0.5 * sin(t * 24.0) if kind == "jump" else 0.0))
-        var sample := sin(TAU * freq * t) * envelope * 0.28
-        var value := int(clamp(sample, -1.0, 1.0) * 32767.0)
-        data.append(value & 0xff)
-        data.append((value >> 8) & 0xff)
-    var stream := AudioStreamWAV.new()
-    stream.format = AudioStreamWAV.FORMAT_16_BITS
-    stream.mix_rate = sample_rate
-    stream.stereo = false
-    stream.data = data
-    audio_player.stream = stream
-    audio_player.play()
+func _load_game() -> void:
+    var config := ConfigFile.new()
+    if config.load(SAVE_PATH) != OK:
+        return
+    player_pos = config.get_value("player", "position", Vector2.ZERO)
+    wood = int(config.get_value("inventory", "wood", 0))
+    stone = int(config.get_value("inventory", "stone", 0))
+    berries = int(config.get_value("inventory", "berries", 0))
+    coins = int(config.get_value("inventory", "coins", 0))
+    var saved_objects = config.get_value("world", "objects", [])
+    if saved_objects is Array:
+        world_objects.assign(saved_objects)
