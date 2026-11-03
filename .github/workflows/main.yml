@@ -63,6 +63,18 @@ jobs:
 
       
       
+      - name: Runtime smoke test
+        run: |
+          set +e
+          godot --headless --verbose --path . --quit-after 180 > runtime.log 2>&1
+          status=$?
+          cat runtime.log
+          if [ "$status" -ne 0 ] || grep -E "SCRIPT ERROR|Parse Error|Failed to load script|ERROR:" runtime.log; then
+            echo "Godot runtime test failed. APK export is blocked."
+            exit 1
+          fi
+          echo "Main scene started without script or runtime errors."
+
       - name: Build APK
         run: |
           godot --headless --verbose --path . --export-debug "Android" build/PiggyWorld.apk
