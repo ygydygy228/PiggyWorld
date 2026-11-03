@@ -102,8 +102,8 @@ func _generate_world() -> void:
     _save_game()
 
 func _draw() -> void:
-    var camera_offset: Vector2 = player_pos - VIEW_SIZE * 0.5
-    draw_rect(Rect2(Vector2.ZERO, VIEW_SIZE), Color("#397fa0"))
+    var camera_offset: Vector2 = player_pos - view_size * 0.5
+    draw_rect(Rect2(Vector2.ZERO, view_size), Color("#397fa0"))
     _draw_water(camera_offset)
     var min_x: int = floori(camera_offset.x / TILE) - 1
     var max_x: int = ceili((camera_offset.x + view_size.x) / TILE) + 1
@@ -131,7 +131,7 @@ func _draw() -> void:
     for i in range(world_objects.size()):
         var item: Dictionary = world_objects[i]
         var screen_pos: Vector2 = item["pos"] - camera_offset
-        if screen_pos.x < -45 or screen_pos.x > VIEW_SIZE.x + 45 or screen_pos.y < -60 or screen_pos.y > VIEW_SIZE.y + 60:
+        if screen_pos.x < -45 or screen_pos.x > view_size.x + 45 or screen_pos.y < -60 or screen_pos.y > view_size.y + 60:
             continue
         match String(item["kind"]):
             "tree":
@@ -142,7 +142,7 @@ func _draw() -> void:
                 _draw_bush(screen_pos)
             "house":
                 _draw_house(screen_pos, int(item["variant"]))
-    _draw_pig(VIEW_SIZE * 0.5)
+    _draw_pig(view_size * 0.5)
     _draw_joystick()
 
 func _draw_water(camera_offset: Vector2) -> void:
@@ -172,7 +172,7 @@ func _draw_path(camera_offset: Vector2) -> void:
         var world_x: float = float(x) * 24.0
         var world_y: float = sin(world_x / 155.0) * 82.0 + 58.0
         var screen: Vector2 = Vector2(world_x, world_y) - camera_offset
-        if screen.x > -24 and screen.x < VIEW_SIZE.x + 24 and screen.y > -24 and screen.y < VIEW_SIZE.y + 24:
+        if screen.x > -24 and screen.x < view_size.x + 24 and screen.y > -24 and screen.y < view_size.y + 24:
             draw_rect(Rect2(screen, Vector2(24, 24)), Color("#c9a66b"))
             draw_rect(Rect2(screen + Vector2(4, 5), Vector2(3, 2)), Color("#e0c18a"))
 
