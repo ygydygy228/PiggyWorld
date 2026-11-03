@@ -2,27 +2,29 @@
 config_version=5
 
 [application]
-config/name="Piggy World"
+config/name="PiggyWorld"
 run/main_scene="res://main.tscn"
-config/features=PackedStringArray("4.3", "GL Compatibility")
-config/description="A colorful 3D pig adventure for Android and desktop."
+config/features=PackedStringArray("4.4", "GL Compatibility")
+config/description="A cozy 2D pixel-art island adventure."
 
 [display]
-window/size/viewport_width=1280
-window/size/viewport_height=720
+window/size/viewport_width=480
+window/size/viewport_height=270
+window/size/window_width_override=960
+window/size/window_height_override=540
 window/handheld/orientation=1
-window/stretch/mode="canvas_items"
+window/stretch/mode="viewport"
+window/stretch/aspect="keep"
 
 [rendering]
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/default_filters/use_nearest_mipmap_filter=false
 textures/vram_compression/import_etc2_astc=true
-environment/defaults/default_clear_color=Color(0.48, 0.76, 0.96, 1)
+environment/defaults/default_clear_color=Color(0.22, 0.48, 0.60, 1)
 
 [input]
 move_forward={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":87)]}
 move_back={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":83)]}
 move_left={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":65)]}
 move_right={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":68)]}
-jump={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":32)]}
