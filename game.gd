@@ -133,10 +133,10 @@ func _draw() -> void:
             var screen: Vector2 = world - camera_offset
             if distance <= 1.035:
                 var color: Color
+                var variation: int = absi(tx * 92821 + ty * 68917) % 5
                 if distance > 0.965:
                     color = Color("#d8bd79")
                 else:
-                    var variation: int = absi(tx * 92821 + ty * 68917) % 5
                     var greens: Array[Color] = [Color("#65ad55"), Color("#6db65b"), Color("#5fa44e"), Color("#74ba60"), Color("#68ae55")]
                     color = greens[variation]
                 if atlas_texture != null:
@@ -147,6 +147,8 @@ func _draw() -> void:
                 if distance < 0.95:
                     _draw_ground_detail(screen, tx, ty)
     _draw_path(camera_offset)
+    _draw_farm_patch(camera_offset)
+    _draw_fence(camera_offset)
     for i in range(world_objects.size()):
         var item: Dictionary = world_objects[i]
         var screen_pos: Vector2 = item["pos"] - camera_offset
@@ -199,6 +201,7 @@ func _draw_path(camera_offset: Vector2) -> void:
             draw_rect(Rect2(screen + Vector2(4, 5), Vector2(3, 2)), Color("#e0c18a"))
 
 func _draw_tree(p: Vector2, variant: int) -> void:
+    draw_rect(Rect2(p + Vector2(-18, 8), Vector2(36, 7)), Color(0.12, 0.24, 0.16, 0.24))
     draw_rect(Rect2(p + Vector2(-14, 5), Vector2(29, 8)), Color("#315e3b"))
     draw_rect(Rect2(p + Vector2(-5, -15), Vector2(11, 25)), Color("#684329"))
     draw_rect(Rect2(p + Vector2(-20, -39), Vector2(40, 31)), Color("#204f37"))
@@ -210,8 +213,13 @@ func _draw_tree(p: Vector2, variant: int) -> void:
     draw_rect(Rect2(p + Vector2(-2, -14), Vector2(4, 13)), Color("#8c5a32"))
     if variant % 2 == 0:
         draw_rect(Rect2(p + Vector2(5, -22), Vector2(6, 5)), Color("#74b95d"))
+    draw_rect(Rect2(p + Vector2(-12, -43), Vector2(7, 4)), Color("#79c46b"))
+    draw_rect(Rect2(p + Vector2(7, -34), Vector2(5, 4)), Color("#276c40"))
+    draw_rect(Rect2(p + Vector2(-2, -49), Vector2(4, 3)), Color("#8bd078"))
+    draw_rect(Rect2(p + Vector2(-3, -5), Vector2(6, 11)), Color("#9b6840"))
 
 func _draw_rock(p: Vector2, variant: int) -> void:
+    draw_rect(Rect2(p + Vector2(-17, 7), Vector2(35, 6)), Color(0.12, 0.2, 0.18, 0.24))
     draw_rect(Rect2(p + Vector2(-14, 0), Vector2(29, 11)), Color("#586d68"))
     draw_rect(Rect2(p + Vector2(-12, -7), Vector2(25, 13)), Color("#788f87"))
     draw_rect(Rect2(p + Vector2(-7, -13), Vector2(17, 12)), Color("#9eafa3"))
@@ -219,14 +227,20 @@ func _draw_rock(p: Vector2, variant: int) -> void:
     draw_rect(Rect2(p + Vector2(-9, -3), Vector2(5, 3)), Color("#b6c5b7"))
     if variant % 2 == 0:
         draw_rect(Rect2(p + Vector2(3, -4), Vector2(4, 3)), Color("#d0d6c8"))
+    draw_rect(Rect2(p + Vector2(-8, -8), Vector2(4, 2)), Color("#e4e8dc"))
+    draw_rect(Rect2(p + Vector2(7, 1), Vector2(4, 2)), Color("#52645f"))
 
 func _draw_bush(p: Vector2) -> void:
+    draw_rect(Rect2(p + Vector2(-15, 6), Vector2(31, 5)), Color(0.12, 0.22, 0.14, 0.22))
     draw_rect(Rect2(p + Vector2(-12, -3), Vector2(25, 10)), Color("#347844"))
     draw_rect(Rect2(p + Vector2(-9, -10), Vector2(19, 13)), Color("#4b9b50"))
     for berry in [Vector2(-5, -5), Vector2(4, -7), Vector2(7, 0)]:
         draw_rect(Rect2(p + berry, Vector2(3, 3)), Color("#d94f69"))
+        draw_rect(Rect2(p + berry, Vector2(1, 1)), Color("#ff9a9e"))
+    draw_rect(Rect2(p + Vector2(-3, -12), Vector2(8, 3)), Color("#76b95a"))
 
 func _draw_house(p: Vector2, variant: int) -> void:
+    draw_rect(Rect2(p + Vector2(-33, 19), Vector2(66, 8)), Color(0.12, 0.2, 0.14, 0.24))
     var wall: Color = Color("#e8c58a") if variant == 0 else Color("#d98f78")
     draw_rect(Rect2(p + Vector2(-28, -12), Vector2(56, 34)), Color("#65412f"))
     draw_rect(Rect2(p + Vector2(-25, -19), Vector2(50, 34)), wall)
@@ -238,6 +252,11 @@ func _draw_house(p: Vector2, variant: int) -> void:
     draw_rect(Rect2(p + Vector2(-17, -11), Vector2(8, 8)), Color("#83c7d2"))
     draw_rect(Rect2(p + Vector2(9, -11), Vector2(8, 8)), Color("#83c7d2"))
     draw_rect(Rect2(p + Vector2(-1, -6), Vector2(2, 2)), Color("#f5d77a"))
+    draw_rect(Rect2(p + Vector2(-25, -18), Vector2(4, 23)), Color("#f3d7a4"))
+    draw_rect(Rect2(p + Vector2(21, -18), Vector2(4, 23)), Color("#c98b6e"))
+    draw_rect(Rect2(p + Vector2(-18, -27), Vector2(9, 3)), Color("#df8a70"))
+    draw_rect(Rect2(p + Vector2(9, -27), Vector2(9, 3)), Color("#df8a70"))
+    draw_rect(Rect2(p + Vector2(-22, 3), Vector2(5, 3)), Color("#fff0c9"))
 
 func _draw_pig(center: Vector2) -> void:
     var step: int = 1 if move_vector.length() > 0.08 or move_target.x > -9000 else 0
@@ -259,6 +278,44 @@ func _draw_pig(center: Vector2) -> void:
     draw_rect(Rect2(center + Vector2(-7, 15 + leg_shift), Vector2(6, 5)), Color("#c96f82"))
     draw_rect(Rect2(center + Vector2(3, 15 - leg_shift), Vector2(6, 5)), Color("#c96f82"))
     draw_rect(Rect2(center + Vector2(-13, 2), Vector2(4, 4)), Color("#f4a7b1"))
+    draw_rect(Rect2(center + Vector2(-7, 7), Vector2(13, 2)), Color("#ffd1d1"))
+    draw_rect(Rect2(center + Vector2(-12, -4), Vector2(3, 3)), Color("#fff0d9"))
+    draw_rect(Rect2(center + Vector2(7, -4), Vector2(3, 3)), Color("#fff0d9"))
+    draw_rect(Rect2(center + Vector2(-15, 17 + leg_shift), Vector2(5, 3)), Color("#f1a0ad"))
+    draw_rect(Rect2(center + Vector2(5, 17 - leg_shift), Vector2(5, 3)), Color("#f1a0ad"))
+    draw_rect(Rect2(center + Vector2(11, 8), Vector2(5, 3)), Color("#d8798a"))
+    draw_rect(Rect2(center + Vector2(15, 6), Vector2(3, 3)), Color("#e78e9f"))
+
+func _draw_farm_patch(camera_offset: Vector2) -> void:
+    var origin := Vector2(-18, 132) - camera_offset
+    draw_rect(Rect2(origin + Vector2(-8, -8), Vector2(104, 76)), Color("#bd9861"))
+    draw_rect(Rect2(origin + Vector2(-8, -8), Vector2(104, 4)), Color("#e0bf83"))
+    for row in range(3):
+        for col in range(4):
+            var cell := origin + Vector2(float(col) * 24.0, float(row) * 22.0)
+            draw_rect(Rect2(cell, Vector2(20, 17)), Color("#8d5b3d"))
+            draw_rect(Rect2(cell + Vector2(2, 3), Vector2(16, 2)), Color("#b77b4e"))
+            draw_line(cell + Vector2(5, 7), cell + Vector2(5, 15), Color("#70452f"), 1.0)
+            draw_line(cell + Vector2(13, 7), cell + Vector2(13, 15), Color("#70452f"), 1.0)
+            var grow := 4.0 + float((row + col) % 3) * 2.0
+            draw_line(cell + Vector2(10, 9), cell + Vector2(10, 9 - grow), Color("#367b43"), 2.0)
+            draw_line(cell + Vector2(10, 7), cell + Vector2(5, 4 - grow * 0.25), Color("#56a94e"), 2.0)
+            draw_line(cell + Vector2(10, 7), cell + Vector2(15, 4 - grow * 0.25), Color("#6abb56"), 2.0)
+            if (row + col) % 2 == 0:
+                draw_circle(cell + Vector2(10, 5 - grow * 0.25), 2.0, Color("#f2c75d"))
+
+func _draw_fence(camera_offset: Vector2) -> void:
+    for i in range(13):
+        var p := Vector2(-250.0 + float(i) * 38.0, -178.0) - camera_offset
+        if p.x < -20 or p.x > view_size.x + 20:
+            continue
+        draw_rect(Rect2(p + Vector2(-3, -1), Vector2(7, 25)), Color("#765038"))
+        draw_rect(Rect2(p + Vector2(-4, 1), Vector2(4, 5)), Color("#d4a16a"))
+        draw_rect(Rect2(p + Vector2(-4, 11), Vector2(4, 4)), Color("#b47a4d"))
+    var left := Vector2(-250, -166) - camera_offset
+    var right := Vector2(206, -166) - camera_offset
+    draw_rect(Rect2(left, Vector2(right.x - left.x + 4, 5)), Color("#9c6a43"))
+    draw_rect(Rect2(left + Vector2(0, 12), Vector2(right.x - left.x + 4, 5)), Color("#9c6a43"))
 
 func _draw_joystick() -> void:
     var base: Vector2 = Vector2(68, view_size.y - 78)
