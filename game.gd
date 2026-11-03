@@ -62,6 +62,8 @@ func _process(delta: float) -> void:
     queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
+    if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_E:
+        _interact()
     if event is InputEventScreenTouch:
         if event.pressed:
             if event.position.x < 145.0 and event.position.y > 135.0:
