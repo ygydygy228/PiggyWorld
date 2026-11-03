@@ -233,7 +233,7 @@ func _draw_house(p: Vector2, variant: int) -> void:
     draw_rect(Rect2(p + Vector2(-28, -19), Vector2(56, 42)), Color("#e7c58c"))
 
 func draw_ellipse_shadow(center: Vector2, size: Vector2) -> void:
-    draw_set_transform(center)
+    draw_set_transform(center, 0.0, Vector2(1.0, size.y / size.x))
     draw_circle(Vector2.ZERO, size.x, Color(0.12, 0.2, 0.14, 0.22))
     draw_set_transform(Vector2.ZERO)
 
