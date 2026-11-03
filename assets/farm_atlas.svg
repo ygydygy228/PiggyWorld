@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" shape-rendering="crispEdges">
+<rect width="128" height="128" fill="#253c32"/>
+<!-- grass -->
+<g transform="translate(0 0)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="2" y="3" width="3" height="2" fill="#82c96b"/><rect x="10" y="2" width="2" height="3" fill="#559b4d"/><rect x="6" y="10" width="3" height="2" fill="#5da44e"/><rect x="12" y="12" width="2" height="2" fill="#8acb70"/><rect x="1" y="13" width="2" height="1" fill="#4d9148"/>
+</g>
+<!-- grass flowers -->
+<g transform="translate(16 0)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="3" y="4" width="2" height="2" fill="#fff0b5"/><rect x="2" y="5" width="4" height="1" fill="#f6d77d"/><rect x="11" y="10" width="2" height="2" fill="#fff0b5"/><rect x="10" y="11" width="4" height="1" fill="#f6d77d"/><rect x="7" y="2" width="2" height="3" fill="#559b4d"/>
+</g>
+<!-- sand -->
+<g transform="translate(32 0)">
+<rect width="16" height="16" fill="#d9bd7c"/><rect x="2" y="3" width="3" height="1" fill="#ecd49a"/><rect x="9" y="6" width="2" height="2" fill="#c7a96b"/><rect x="5" y="12" width="3" height="1" fill="#f0dba8"/><rect x="13" y="13" width="2" height="1" fill="#c7a96b"/>
+</g>
+<!-- path -->
+<g transform="translate(48 0)">
+<rect width="16" height="16" fill="#bd9861"/><rect x="1" y="2" width="4" height="2" fill="#d4b078"/><rect x="9" y="4" width="3" height="2" fill="#a98252"/><rect x="5" y="10" width="4" height="2" fill="#d8b77f"/><rect x="12" y="13" width="2" height="1" fill="#a98252"/>
+</g>
+<!-- water -->
+<g transform="translate(64 0)">
+<rect width="16" height="16" fill="#4d9db5"/><rect x="2" y="3" width="6" height="1" fill="#8bd0d0"/><rect x="10" y="7" width="4" height="1" fill="#347e9d"/><rect x="4" y="12" width="5" height="1" fill="#76c1ca"/><rect x="12" y="2" width="2" height="2" fill="#65b3c3"/>
+</g>
+<!-- tilled soil -->
+<g transform="translate(80 0)">
+<rect width="16" height="16" fill="#96613e"/><path d="M2 0v16 M7 0v16 M12 0v16" stroke="#75472f" stroke-width="2"/><path d="M3 0v16 M8 0v16 M13 0v16" stroke="#b77a4c" stroke-width="1"/>
+</g>
+<!-- seedling -->
+<g transform="translate(96 0)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="7" y="9" width="2" height="5" fill="#397a43"/><path d="M8 10L3 6L4 4L9 9L12 4L14 5L9 11Z" fill="#398b49"/><rect x="3" y="5" width="3" height="2" fill="#78c965"/>
+</g>
+<!-- mature crop -->
+<g transform="translate(112 0)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="7" y="7" width="2" height="8" fill="#397a43"/><path d="M8 10L2 6L3 4L9 9L13 3L15 4L9 11Z" fill="#2f7d43"/><rect x="2" y="4" width="4" height="2" fill="#8bd16a"/><rect x="12" y="3" width="3" height="2" fill="#8bd16a"/><rect x="6" y="6" width="4" height="3" fill="#f0c84e"/>
+</g>
+<!-- lower row decorative ground and fence tiles -->
+<g transform="translate(0 16)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="3" y="4" width="2" height="5" fill="#4c944b"/><rect x="4" y="3" width="2" height="2" fill="#80c96a"/><rect x="11" y="10" width="2" height="4" fill="#4c944b"/>
+</g>
+<g transform="translate(16 16)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="2" y="12" width="3" height="2" fill="#d8d28b"/><rect x="4" y="10" width="2" height="2" fill="#fff0b5"/><rect x="11" y="3" width="3" height="2" fill="#e8a3a3"/>
+</g>
+<g transform="translate(32 16)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="2" y="7" width="12" height="2" fill="#8c5d3d"/><rect x="3" y="3" width="2" height="10" fill="#a8754c"/><rect x="11" y="3" width="2" height="10" fill="#a8754c"/><rect x="2" y="2" width="12" height="2" fill="#d2a36c"/>
+</g>
+<g transform="translate(48 16)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="2" y="8" width="12" height="2" fill="#8c5d3d"/><rect x="3" y="4" width="2" height="9" fill="#a8754c"/><rect x="11" y="4" width="2" height="9" fill="#a8754c"/>
+</g>
+<g transform="translate(64 16)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="3" y="9" width="10" height="5" fill="#d6a06b"/><rect x="4" y="8" width="8" height="2" fill="#f0c18a"/><rect x="6" y="11" width="2" height="2" fill="#8e5d42"/>
+</g>
+<g transform="translate(80 16)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="3" y="7" width="10" height="7" fill="#7b4c35"/><rect x="2" y="5" width="12" height="3" fill="#a94e49"/><rect x="4" y="3" width="8" height="3" fill="#c96b58"/><rect x="7" y="9" width="3" height="5" fill="#e8c58a"/>
+</g>
+<g transform="translate(96 16)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="3" y="9" width="10" height="5" fill="#596f68"/><rect x="4" y="6" width="8" height="5" fill="#82988b"/><rect x="7" y="4" width="4" height="4" fill="#b4c2b0"/>
+</g>
+<g transform="translate(112 16)">
+<rect width="16" height="16" fill="#70b85c"/><rect x="3" y="10" width="10" height="4" fill="#347844"/><rect x="4" y="6" width="8" height="6" fill="#4b9b50"/><rect x="6" y="7" width="2" height="2" fill="#d94f69"/><rect x="10" y="9" width="2" height="2" fill="#d94f69"/>
+</g>
+</svg>
