@@ -1,4 +1,3 @@
-
 name: Build PiggyWorld APK
 
 on:
@@ -54,35 +53,46 @@ jobs:
           EOF
 
           cat /root/.config/godot/editor_settings-4.4.tres
-
           echo "Godot Android settings configured!"
-          
+
       - name: Import project
         run: |
           godot --headless --verbose --path . --import
 
-      
-      
-      - name: Runtime smoke test
+      - name: Runtime gameplay smoke test
         run: |
           set +e
-          godot --headless --verbose --path . --quit-after 180 > runtime.log 2>&1
+          godot --headless --verbose --path . --script scripts/dev/smoke_test.gd > runtime.log 2>&1
           status=$?
+          set -e
+
           cat runtime.log
-          if [ "$status" -ne 0 ] || grep -E "SCRIPT ERROR|Parse Error|Failed to load script|ERROR:" runtime.log; then
-            echo "Godot runtime test failed. APK export is blocked."
+
+          if [ "$status" -ne 0 ]; then
+            echo "Godot gameplay smoke test exited with status $status."
             exit 1
           fi
-          echo "Main scene started without script or runtime errors."
+
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|ERROR:" runtime.log; then
+            echo "Godot runtime test reported an error. APK export is blocked."
+            exit 1
+          fi
+
+          if ! grep -q "SMOKE_OK:" runtime.log; then
+            echo "Gameplay smoke test did not reach its success marker."
+            exit 1
+          fi
+
+          echo "Gameplay smoke test passed."
 
       - name: Build APK
         run: |
           godot --headless --verbose --path . --export-debug "Android" build/PiggyWorld.apk
           test -s build/PiggyWorld.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: PiggyWorld-Android
           path: build/PiggyWorld.apk
           if-no-files-found: error
-          
