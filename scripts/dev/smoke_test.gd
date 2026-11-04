@@ -1,19 +1,45 @@
 extends SceneTree
-## Дымовой тест для CI: godot --headless --path . -s scripts/dev/smoke_test.gd
-## Запускает главную сцену, начинает новую игру и крутит игру ~200 кадров.
+## Запускает главное меню, начинает новую игру и проверяет базовые узлы мира.
+## CI: godot --headless --path . -s scripts/dev/smoke_test.gd
 
-var _frames: int = 0
-var _main: Node
+func _initialize() -> void:
+	call_deferred("_run_smoke_test")
 
 
-func _process(_delta: float) -> bool:
-	_frames += 1
-	if _frames == 1:
-		_main = load("res://scenes/main.tscn").instantiate()
-		root.add_child(_main)
-	elif _frames == 5:
-		_main._start_game(false)
-	elif _frames == 200:
-		print("SMOKE_OK")
-		quit(0)
-	return false
+func _run_smoke_test() -> void:
+	var packed := load("res://scenes/main.tscn") as PackedScene
+	if packed == null:
+		push_error("SMOKE_FAILED: cannot load res://scenes/main.tscn")
+		quit(1)
+		return
+
+	var main := packed.instantiate()
+	root.add_child(main)
+	await process_frame
+
+	if not main.has_method("_start_game"):
+		push_error("SMOKE_FAILED: Main has no _start_game method")
+		quit(1)
+		return
+
+	main.call("_start_game", false)
+	await process_frame
+
+	var world := main.get("_world") as Node
+	if world == null or not is_instance_valid(world):
+		push_error("SMOKE_FAILED: game world was not created")
+		quit(1)
+		return
+
+	var player := world.get("player") as Node
+	if player == null or not is_instance_valid(player):
+		push_error("SMOKE_FAILED: player was not created in the world")
+		quit(1)
+		return
+
+	# Даём сценам, анимациям и игровым системам время пройти _ready/_process.
+	for frame in range(200):
+		await process_frame
+
+	print("SMOKE_OK: menu, world and player initialized; 200 frames processed")
+	quit(0)
