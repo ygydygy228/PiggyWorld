@@ -29,6 +29,23 @@ func _ready() -> void:
 	_apply_volumes()
 
 
+func _exit_tree() -> void:
+	# Останавливаем проигрывание и освобождаем ссылки на AudioStream
+	# до уничтожения AudioManager при завершении приложения.
+	for p in _pool:
+		if is_instance_valid(p):
+			p.stop()
+			p.stream = null
+	if is_instance_valid(_music):
+		_music.stop()
+		_music.stream = null
+	if is_instance_valid(_ambient):
+		_ambient.stop()
+		_ambient.stream = null
+	_cache.clear()
+	_ambient_name = ""
+
+
 func _stream(sound: String) -> AudioStream:
 	if not _cache.has(sound):
 		var path := "res://assets/audio/%s.wav" % sound
@@ -63,6 +80,7 @@ func set_ambient(sound: String) -> void:
 	_ambient_name = sound
 	if sound == "":
 		_ambient.stop()
+		_ambient.stream = null
 		return
 	var s := _stream(sound)
 	if s != null:
