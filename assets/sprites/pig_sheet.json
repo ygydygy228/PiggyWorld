@@ -1,0 +1,162 @@
+{
+ "frame_w": 32,
+ "frame_h": 40,
+ "ground_y": 36,
+ "columns": 6,
+ "rows": [
+  {
+   "name": "idle_down",
+   "row": 0,
+   "frames": 4,
+   "fps": 4,
+   "loop": true
+  },
+  {
+   "name": "idle_side",
+   "row": 1,
+   "frames": 4,
+   "fps": 4,
+   "loop": true
+  },
+  {
+   "name": "idle_up",
+   "row": 2,
+   "frames": 4,
+   "fps": 4,
+   "loop": true
+  },
+  {
+   "name": "walk_down",
+   "row": 3,
+   "frames": 6,
+   "fps": 9,
+   "loop": true
+  },
+  {
+   "name": "walk_side",
+   "row": 4,
+   "frames": 6,
+   "fps": 9,
+   "loop": true
+  },
+  {
+   "name": "walk_up",
+   "row": 5,
+   "frames": 6,
+   "fps": 9,
+   "loop": true
+  },
+  {
+   "name": "run_down",
+   "row": 6,
+   "frames": 6,
+   "fps": 13,
+   "loop": true
+  },
+  {
+   "name": "run_side",
+   "row": 7,
+   "frames": 6,
+   "fps": 13,
+   "loop": true
+  },
+  {
+   "name": "run_up",
+   "row": 8,
+   "frames": 6,
+   "fps": 13,
+   "loop": true
+  },
+  {
+   "name": "eat_down",
+   "row": 9,
+   "frames": 4,
+   "fps": 6,
+   "loop": true
+  },
+  {
+   "name": "eat_side",
+   "row": 10,
+   "frames": 4,
+   "fps": 6,
+   "loop": true
+  },
+  {
+   "name": "eat_up",
+   "row": 11,
+   "frames": 4,
+   "fps": 6,
+   "loop": true
+  },
+  {
+   "name": "happy_down",
+   "row": 12,
+   "frames": 6,
+   "fps": 8,
+   "loop": true
+  },
+  {
+   "name": "happy_side",
+   "row": 13,
+   "frames": 6,
+   "fps": 8,
+   "loop": true
+  },
+  {
+   "name": "happy_up",
+   "row": 14,
+   "frames": 6,
+   "fps": 8,
+   "loop": true
+  },
+  {
+   "name": "sad_down",
+   "row": 15,
+   "frames": 4,
+   "fps": 4,
+   "loop": true
+  },
+  {
+   "name": "sad_side",
+   "row": 16,
+   "frames": 4,
+   "fps": 4,
+   "loop": true
+  },
+  {
+   "name": "sad_up",
+   "row": 17,
+   "frames": 4,
+   "fps": 4,
+   "loop": true
+  },
+  {
+   "name": "interact_down",
+   "row": 18,
+   "frames": 4,
+   "fps": 6,
+   "loop": true
+  },
+  {
+   "name": "interact_side",
+   "row": 19,
+   "frames": 4,
+   "fps": 6,
+   "loop": true
+  },
+  {
+   "name": "interact_up",
+   "row": 20,
+   "frames": 4,
+   "fps": 6,
+   "loop": true
+  },
+  {
+   "name": "sleep_side",
+   "row": 21,
+   "frames": 4,
+   "fps": 3,
+   "loop": true
+  }
+ ]
+}
