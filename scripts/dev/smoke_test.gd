@@ -43,12 +43,16 @@ func _run_smoke_test() -> void:
 
 	print("SMOKE_OK: menu, world and player initialized; 200 frames processed")
 
-	# AudioServer releases stopped stream playback asynchronously; give it
-	# frames to release both music and ambient resources before SceneTree exits.
+	# Remove the running world first: its _process() updates ambient audio
+	# every frame and would otherwise attach ambient_day.wav again after stop_all().
 	var audio_manager := root.get_node_or_null("AudioManager")
-	if audio_manager != null:
+	main.queue_free()
+	await process_frame
+
+	# Stop and detach all streams only after gameplay nodes have left the tree.
+	if audio_manager != null and is_instance_valid(audio_manager):
 		audio_manager.call("stop_all")
-	for frame in range(3):
+	for frame in range(8):
 		await process_frame
 
 	quit(0)
