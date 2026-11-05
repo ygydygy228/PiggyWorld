@@ -5,6 +5,8 @@ const WorldObject := preload("res://scripts/world/world_object.gd")
 const Player := preload("res://scripts/player/player.gd")
 const WeatherFx := preload("res://scripts/fx/weather_fx.gd")
 const Fx := preload("res://scripts/fx/fx.gd")
+const Animal := preload("res://scripts/animals/animal.gd")
+const Npc := preload("res://scripts/world/npc.gd")
 
 const MAP_W := 96
 const MAP_H := 72
@@ -22,6 +24,20 @@ const FARM_RECT := Rect2i(46, 33, 12, 9)
 const VILLAGE_RECT := Rect2i(60, 26, 20, 20)
 const CAVE_CELL := Vector2i(48, 19)
 const LAKE_CENTER := Vector2(52, 52)
+
+## per — сколько дней с поливом нужно на одну стадию роста (всего 3 стадии роста).
+const CROPS := {
+	"carrot": {"seed": "carrot_seed", "item": "carrot", "per": 1, "max": 2, "fx": Color("#f08a2c")},
+	"turnip": {"seed": "turnip_seed", "item": "turnip", "per": 1, "max": 2, "fx": Color("#9a5ab0")},
+	"pumpkin": {"seed": "pumpkin_seed", "item": "pumpkin", "per": 2, "max": 1, "fx": Color("#f08a2c")},
+}
+
+const ANIMAL_SPOTS := [
+	["cow", Vector2i(50, 30)], ["cow", Vector2i(54, 30)], ["sheep", Vector2i(57, 31)], ["sheep", Vector2i(48, 31)],
+	["chicken", Vector2i(43, 41)], ["chicken", Vector2i(45, 42)], ["chicken", Vector2i(42, 43)],
+	["rabbit", Vector2i(30, 36)], ["rabbit", Vector2i(31, 39)], ["cat", Vector2i(38, 40)], ["dog", Vector2i(63, 44)],
+]
+const NPC_SPOTS := {"shopkeeper": Vector2i(69, 36), "farmer": Vector2i(61, 37), "granny": Vector2i(70, 40)}
 
 const SEASON_GROUND := [
 	{"tint": Color(1.0, 1.0, 1.0), "snow": 0.0},
@@ -45,6 +61,7 @@ var soil: Dictionary = {}
 var crops: Dictionary = {}
 var crop_nodes: Dictionary = {}
 var removed_uids: Dictionary = {}
+var animals: Array = []
 var rng := RandomNumberGenerator.new()
 
 var tileset: TileSet
@@ -74,6 +91,7 @@ func _ready() -> void:
 	_paint_layers()
 	_place_landmarks()
 	_scatter_objects()
+	_spawn_creatures(saved)
 	_restore_farm(saved)
 	_spawn_player(saved)
 	EventBus.day_started.connect(_on_day_started)
@@ -231,6 +249,9 @@ func _generate_terrain() -> void:
 	_reserve(VILLAGE_RECT)
 	_reserve(Rect2i(CAVE_CELL - Vector2i(4, 3), Vector2i(9, 6)))
 	_reserve(Rect2i(SPAWN_CELL - Vector2i(3, 2), Vector2i(7, 4)))
+	_reserve(Rect2i(47, 27, 14, 6))
+	_reserve(Rect2i(41, 41, 6, 4))
+	_reserve(Rect2i(28, 35, 6, 6))
 
 
 func _carve_path(a: Vector2i, b: Vector2i) -> void:
@@ -405,7 +426,11 @@ func _restore_farm(saved: Dictionary) -> void:
 		_paint_soil(c)
 	for cr in saved.get("crops", []):
 		var c := Vector2i(int(cr["x"]), int(cr["y"]))
-		crops[c] = {"stage": int(cr["stage"]), "watered": bool(cr["watered"])}
+		var ctype := str(cr.get("type", "carrot"))
+		if not CROPS.has(ctype):
+			ctype = "carrot"
+		var per: int = CROPS[ctype]["per"]
+		crops[c] = {"type": ctype, "stage": int(cr["stage"]), "age": int(cr.get("age", int(cr["stage"]) * per)), "watered": bool(cr["watered"])}
 		_update_crop_node(c)
 
 
@@ -422,7 +447,7 @@ func _update_crop_node(c: Vector2i) -> void:
 		s.position = Vector2(c.x * TILE, c.y * TILE)
 		ground_node.add_child(s)
 		crop_nodes[c] = s
-	s.texture = load("res://assets/objects/crop_carrot_%d.png" % clampi(stage, 0, 3))
+	s.texture = load("res://assets/objects/crop_%s_%d.png" % [crops[c]["type"], clampi(stage, 0, 3)])
 
 
 func _object_near(p: Vector2, radius: float) -> WorldObject:
@@ -439,13 +464,18 @@ func _object_near(p: Vector2, radius: float) -> WorldObject:
 
 
 func harvest_at(target: Vector2) -> String:
+	var creature = _creature_near(target + Vector2(0, 3), 18.0)
+	if creature != null:
+		return creature.interact()
 	var cell := pos_to_cell(target)
 	if crops.has(cell) and int(crops[cell]["stage"]) >= 3:
-		var amount := 1 + rng.randi() % 2
-		GameState.add_item("carrot", amount)
-		EventBus.message.emit("+%d %s" % [amount, GameState.item_name("carrot")])
+		var cdef: Dictionary = CROPS[crops[cell]["type"]]
+		var amount := 1 + rng.randi() % int(cdef["max"])
+		var item := str(cdef["item"])
+		GameState.add_item(item, amount)
+		EventBus.message.emit("+%d %s" % [amount, GameState.item_name(item)])
 		AudioManager.play("pickup")
-		Fx.burst(ground_node, cell_center(cell), Color("#f08a2c"), 10, 50.0)
+		Fx.burst(ground_node, cell_center(cell), cdef["fx"], 10, 50.0)
 		crop_nodes[cell].queue_free()
 		crop_nodes.erase(cell)
 		crops.erase(cell)
@@ -493,34 +523,29 @@ func use_tool(tool_id: String, target: Vector2) -> String:
 			AudioManager.play("water")
 			Fx.burst(ground_node, cell_center(cell), Color("#78bef0"), 10, 35.0)
 			return "ok"
-		"carrot_seed":
-			if not soil.has(cell) or crops.has(cell):
-				AudioManager.play("error")
-				return "sad"
-			if not GameState.remove_item("carrot_seed"):
-				EventBus.message.emit("Семена закончились")
-				AudioManager.play("error")
-				return "sad"
-			crops[cell] = {"stage": 0, "watered": bool(soil[cell])}
-			_update_crop_node(cell)
-			AudioManager.play("plant")
-			return "ok"
+		_:
+			if tool_id.ends_with("_seed"):
+				return _plant(tool_id, cell)
 	return "none"
 
 
 func _on_day_started(_day: int) -> void:
 	var raining := TimeSystem.weather == "rain"
 	for c in crops:
+		var cr: Dictionary = crops[c]
 		if raining:
-			crops[c]["watered"] = true
-		if crops[c]["watered"]:
-			crops[c]["stage"] = mini(3, int(crops[c]["stage"]) + 1)
-		crops[c]["watered"] = raining
+			cr["watered"] = true
+		if cr["watered"]:
+			cr["age"] = int(cr["age"]) + 1
+			var per: int = CROPS[cr["type"]]["per"]
+			cr["stage"] = mini(3, int(floor(float(cr["age"]) / per)))
+		cr["watered"] = raining
 		_update_crop_node(c)
 	for c in soil:
 		soil[c] = raining
 		_paint_soil(c)
 	get_tree().call_group("harvestable", "regrow")
+	get_tree().call_group("animals", "refill")
 	_apply_season()
 	EventBus.message.emit("Наступил день %d. %s" % [TimeSystem.day, TimeSystem.season_name()])
 
@@ -552,10 +577,58 @@ func serialize() -> Dictionary:
 		soil_list.append({"x": c.x, "y": c.y, "wet": soil[c]})
 	var crop_list: Array = []
 	for c in crops:
-		crop_list.append({"x": c.x, "y": c.y, "stage": crops[c]["stage"], "watered": crops[c]["watered"]})
+		crop_list.append({"x": c.x, "y": c.y, "type": crops[c]["type"], "age": crops[c]["age"], "stage": crops[c]["stage"], "watered": crops[c]["watered"]})
 	return {
 		"removed": removed_uids.keys(),
 		"soil": soil_list,
 		"crops": crop_list,
+		"animals_ready": animals.map(func(a) -> bool: return a.product_ready),
 		"player": [player.position.x, player.position.y],
 	}
+
+
+# ---------------------------------------------------------------- существа
+
+func _spawn_creatures(saved: Dictionary) -> void:
+	for spot in ANIMAL_SPOTS:
+		var a := Animal.new()
+		a.setup(str(spot[0]), cell_center(spot[1]), self)
+		objects_node.add_child(a)
+		animals.append(a)
+	var ready_list: Array = saved.get("animals_ready", [])
+	for i in range(mini(ready_list.size(), animals.size())):
+		animals[i].product_ready = bool(ready_list[i])
+	for npc_id in NPC_SPOTS:
+		var n := Npc.new()
+		n.setup(str(npc_id), cell_center(NPC_SPOTS[npc_id]))
+		objects_node.add_child(n)
+
+
+func _creature_near(p: Vector2, radius: float):
+	var best = null
+	var best_d := radius
+	for group in ["animals", "npcs"]:
+		for n in get_tree().get_nodes_in_group(group):
+			var d: float = (n as Node2D).global_position.distance_to(p)
+			if d < best_d:
+				best_d = d
+				best = n
+	return best
+
+
+func _plant(tool_id: String, cell: Vector2i) -> String:
+	var crop_type := ""
+	for k in CROPS:
+		if CROPS[k]["seed"] == tool_id:
+			crop_type = str(k)
+	if crop_type == "" or not soil.has(cell) or crops.has(cell):
+		AudioManager.play("error")
+		return "sad"
+	if not GameState.remove_item(tool_id):
+		EventBus.message.emit("Семена закончились")
+		AudioManager.play("error")
+		return "sad"
+	crops[cell] = {"type": crop_type, "stage": 0, "age": 0, "watered": bool(soil[cell])}
+	_update_crop_node(cell)
+	AudioManager.play("plant")
+	return "ok"

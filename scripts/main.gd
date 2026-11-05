@@ -7,6 +7,8 @@ const PauseMenu := preload("res://scripts/ui/pause_menu.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const TouchControls := preload("res://scripts/ui/touch_controls.gd")
 const World := preload("res://scripts/world/world.gd")
+const DialogBox := preload("res://scripts/ui/dialog_box.gd")
+const ShopPanel := preload("res://scripts/ui/shop_panel.gd")
 
 const AUTOSAVE_SECONDS := 60.0
 
@@ -15,12 +17,14 @@ var _world: World
 var _hud: Hud
 var _touch: TouchControls
 var _pause: PauseMenu
+var _overlay: Control
 var _autosave: float = AUTOSAVE_SECONDS
 
 
 func _ready() -> void:
 	get_window().theme = UiTheme.build()
 	AudioManager.play_music()
+	EventBus.dialog_requested.connect(_on_dialog)
 	_show_menu()
 
 
@@ -48,13 +52,14 @@ func _show_menu() -> void:
 
 func _stop_game() -> void:
 	get_tree().paused = false
-	for n in [_world, _hud, _touch, _pause, _menu]:
+	for n in [_world, _hud, _touch, _pause, _overlay, _menu]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()
 	_world = null
 	_hud = null
 	_touch = null
 	_pause = null
+	_overlay = null
 	_menu = null
 
 
@@ -79,7 +84,7 @@ func _start_game(continue_game: bool) -> void:
 
 
 func _open_pause() -> void:
-	if _pause != null or _world == null:
+	if _pause != null or _overlay != null or _world == null:
 		return
 	get_tree().paused = true
 	_touch.enabled = false
@@ -113,3 +118,42 @@ func _leave_to_menu() -> void:
 	if _world != null:
 		SaveSystem.save_game(_world)
 	_show_menu()
+
+
+# ---------------------------------------------------------------- диалоги и магазин
+
+func _set_paused(on: bool) -> void:
+	get_tree().paused = on
+	if _touch != null:
+		_touch.enabled = not on
+	if _world != null:
+		_world.player.input_enabled = not on
+
+
+func _on_dialog(speaker: String, lines: Array, action: String) -> void:
+	if _overlay != null or _pause != null or _world == null:
+		return
+	_set_paused(true)
+	var d := DialogBox.new()
+	d.setup(speaker, lines)
+	add_child(d)
+	_overlay = d
+	d.finished.connect(_on_dialog_finished.bind(action))
+
+
+func _on_dialog_finished(action: String) -> void:
+	_overlay = null
+	if action == "shop":
+		var shop := ShopPanel.new()
+		add_child(shop)
+		_overlay = shop
+		shop.closed.connect(_close_overlay)
+	else:
+		_set_paused(false)
+
+
+func _close_overlay() -> void:
+	if _overlay != null and is_instance_valid(_overlay):
+		_overlay.queue_free()
+	_overlay = null
+	_set_paused(false)

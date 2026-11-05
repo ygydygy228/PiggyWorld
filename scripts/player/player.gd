@@ -63,7 +63,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		GameState.cycle_tool()
 	elif event is InputEventKey:
 		var ke := event as InputEventKey
-		if ke.pressed and not ke.echo and ke.physical_keycode >= KEY_1 and ke.physical_keycode <= KEY_5:
+		if ke.pressed and not ke.echo and ke.physical_keycode >= KEY_1 and ke.physical_keycode <= KEY_7:
 			GameState.select_tool(ke.physical_keycode - KEY_1)
 
 

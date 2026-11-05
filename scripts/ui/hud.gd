@@ -4,7 +4,7 @@ extends CanvasLayer
 signal menu_requested
 
 const UiTheme := preload("res://scripts/ui/ui_theme.gd")
-const RESOURCES: Array[String] = ["wood", "stone", "berries", "carrot", "flower"]
+const RESOURCES: Array[String] = ["wood", "stone", "berries", "flower", "carrot", "turnip", "pumpkin", "egg", "milk", "wool"]
 
 var _money: Label
 var _date: Label
@@ -13,6 +13,8 @@ var _toast: Label
 var _slots: Array[Button] = []
 var _slot_counts: Array[Label] = []
 var _res_labels: Dictionary = {}
+var _res_rows: Dictionary = {}
+var _res_panel: PanelContainer
 var _toast_tween: Tween
 
 
@@ -74,6 +76,7 @@ func _build_top_right(root: Control) -> void:
 		menu_requested.emit())
 	v.add_child(menu)
 	var panel := PanelContainer.new()
+	_res_panel = panel
 	v.add_child(panel)
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -87,6 +90,7 @@ func _build_top_right(root: Control) -> void:
 		h.add_child(l)
 		grid.add_child(h)
 		_res_labels[id] = l
+		_res_rows[id] = h
 	v.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 4)
 	v.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 
@@ -142,11 +146,16 @@ func _refresh() -> void:
 	_money.text = str(GameState.money)
 	_date.text = "День %d  %s" % [TimeSystem.day, TimeSystem.season_name()]
 	_clock.text = "%s  %s" % [TimeSystem.clock_text(), TimeSystem.weather_name()]
+	var any_res := false
 	for id in _res_labels:
-		(_res_labels[id] as Label).text = str(GameState.count(id))
+		var n := GameState.count(id)
+		(_res_labels[id] as Label).text = str(n)
+		(_res_rows[id] as Control).visible = n > 0
+		any_res = any_res or n > 0
+	_res_panel.visible = any_res
 	for i in range(_slots.size()):
 		var id: String = GameState.TOOLS[i]
-		_slot_counts[i].text = str(GameState.count(id)) if id == "carrot_seed" else ""
+		_slot_counts[i].text = str(GameState.count(id)) if id.ends_with("_seed") else ""
 		if i == GameState.selected_tool:
 			_slots[i].add_theme_stylebox_override("normal", UiTheme.box(Color("#8a6a3a"), Color("#fff3d6"), 4.0))
 		else:

@@ -1,20 +1,30 @@
 extends Node
 ## Деньги, инвентарь, выбранный инструмент. Данные предметов описаны таблицей ITEMS.
 
-const TOOLS: Array[String] = ["axe", "pickaxe", "hoe", "can", "carrot_seed"]
+const TOOLS: Array[String] = ["axe", "pickaxe", "hoe", "can", "carrot_seed", "turnip_seed", "pumpkin_seed"]
 
+## sell — цена продажи; buy — цена покупки в лавке (0 = не продаётся/не покупается).
 const ITEMS := {
-	"axe": {"name": "Топор", "icon": "axe", "price": 0},
-	"pickaxe": {"name": "Кирка", "icon": "pickaxe", "price": 0},
-	"hoe": {"name": "Мотыга", "icon": "hoe", "price": 0},
-	"can": {"name": "Лейка", "icon": "can", "price": 0},
-	"carrot_seed": {"name": "Семена моркови", "icon": "seeds", "price": 6},
-	"wood": {"name": "Дерево", "icon": "wood", "price": 3},
-	"stone": {"name": "Камень", "icon": "stone", "price": 4},
-	"berries": {"name": "Ягоды", "icon": "berries", "price": 5},
-	"carrot": {"name": "Морковь", "icon": "carrot", "price": 12},
-	"flower": {"name": "Цветок", "icon": "flower", "price": 2},
+	"axe": {"name": "Топор", "icon": "axe"},
+	"pickaxe": {"name": "Кирка", "icon": "pickaxe"},
+	"hoe": {"name": "Мотыга", "icon": "hoe"},
+	"can": {"name": "Лейка", "icon": "can"},
+	"carrot_seed": {"name": "Семена моркови", "icon": "seeds", "buy": 6, "sell": 3},
+	"turnip_seed": {"name": "Семена репы", "icon": "seeds_turnip", "buy": 8, "sell": 4},
+	"pumpkin_seed": {"name": "Семена тыквы", "icon": "seeds_pumpkin", "buy": 20, "sell": 10},
+	"wood": {"name": "Дерево", "icon": "wood", "sell": 3},
+	"stone": {"name": "Камень", "icon": "stone", "sell": 4},
+	"berries": {"name": "Ягоды", "icon": "berries", "sell": 5},
+	"flower": {"name": "Цветок", "icon": "flower", "sell": 2},
+	"carrot": {"name": "Морковь", "icon": "carrot", "sell": 12},
+	"turnip": {"name": "Репа", "icon": "turnip", "sell": 18},
+	"pumpkin": {"name": "Тыква", "icon": "pumpkin", "sell": 45},
+	"egg": {"name": "Яйцо", "icon": "egg", "sell": 10},
+	"milk": {"name": "Молоко", "icon": "milk", "sell": 18},
+	"wool": {"name": "Шерсть", "icon": "wool", "sell": 15},
 }
+
+const SHOP_STOCK: Array[String] = ["carrot_seed", "turnip_seed", "pumpkin_seed"]
 
 const START_MONEY := 50
 
@@ -31,7 +41,7 @@ func _ready() -> void:
 
 func reset() -> void:
 	money = START_MONEY
-	inventory = {"carrot_seed": 8}
+	inventory = {"carrot_seed": 8, "turnip_seed": 4, "pumpkin_seed": 2}
 	selected_tool = 0
 	EventBus.money_changed.emit(money)
 	EventBus.inventory_changed.emit()
@@ -81,6 +91,14 @@ func spend_money(amount: int) -> bool:
 	money -= amount
 	EventBus.money_changed.emit(money)
 	return true
+
+
+func buy_price(id: String) -> int:
+	return int(ITEMS.get(id, {}).get("buy", 0))
+
+
+func sell_price(id: String) -> int:
+	return int(ITEMS.get(id, {}).get("sell", 0))
 
 
 func item_name(id: String) -> String:
