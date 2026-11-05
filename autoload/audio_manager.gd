@@ -29,9 +29,8 @@ func _ready() -> void:
 	_apply_volumes()
 
 
-func _exit_tree() -> void:
-	# Останавливаем проигрывание и освобождаем ссылки на AudioStream
-	# до уничтожения AudioManager при завершении приложения.
+func stop_all() -> void:
+	# Останавливаем плееры и отвязываем потоки до очистки кэша.
 	for p in _pool:
 		if is_instance_valid(p):
 			p.stop()
@@ -44,6 +43,10 @@ func _exit_tree() -> void:
 		_ambient.stream = null
 	_cache.clear()
 	_ambient_name = ""
+
+
+func _exit_tree() -> void:
+	stop_all()
 
 
 func _stream(sound: String) -> AudioStream:
