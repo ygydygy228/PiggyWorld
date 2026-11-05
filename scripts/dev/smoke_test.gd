@@ -45,7 +45,9 @@ func _run_smoke_test() -> void:
 
 	# AudioServer releases stopped stream playback asynchronously; give it
 	# frames to release both music and ambient resources before SceneTree exits.
-	AudioManager.stop_all()
+	var audio_manager := root.get_node_or_null("AudioManager")
+	if audio_manager != null:
+		audio_manager.call("stop_all")
 	for frame in range(3):
 		await process_frame
 
