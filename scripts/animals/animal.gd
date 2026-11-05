@@ -12,8 +12,6 @@ const SPECIES := {
 	"dog": {"name": "Собака", "speed": 24.0, "radius": 70.0, "product": "", "sound": "bark", "body": 4.0},
 }
 
-static var _frames_cache: Dictionary = {}
-
 var species: String = "cow"
 var world = null
 var home: Vector2 = Vector2.ZERO
@@ -34,8 +32,6 @@ func setup(p_species: String, p_home: Vector2, p_world) -> void:
 
 
 static func _frames(sp: String) -> SpriteFrames:
-	if _frames_cache.has(sp):
-		return _frames_cache[sp]
 	var sheet: Texture2D = load("res://assets/sprites/animals/%s.png" % sp)
 	var sf := SpriteFrames.new()
 	sf.remove_animation("default")
@@ -50,7 +46,6 @@ static func _frames(sp: String) -> SpriteFrames:
 			at.atlas = sheet
 			at.region = Rect2(i * 32, int(r[1]) * 32, 32, 32)
 			sf.add_frame(anim, at)
-	_frames_cache[sp] = sf
 	return sf
 
 
