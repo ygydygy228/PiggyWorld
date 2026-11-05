@@ -42,4 +42,11 @@ func _run_smoke_test() -> void:
 		await process_frame
 
 	print("SMOKE_OK: menu, world and player initialized; 200 frames processed")
+
+	# AudioServer releases stopped stream playback asynchronously; give it
+	# frames to release both music and ambient resources before SceneTree exits.
+	AudioManager.stop_all()
+	for frame in range(3):
+		await process_frame
+
 	quit(0)
