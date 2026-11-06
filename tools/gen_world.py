@@ -267,17 +267,19 @@ def house():
     c.rect(10, 40, 52, 2, wall_l)
     c.rect(10, 60, 52, 4, stone)
     for x in range(12, 62, 6): c.rect(x, 61, 5, 3, stone_d if (x // 6) % 2 else stone_l)
-    # крыша: ряды черепицы
-    for row, y in enumerate(range(10, 40, 5)):
-        half = 10 + (y - 10) * 26 // 30 + 2
+    # крыша: сплошной трапециевидный скат с черепицей (без щелей)
+    for y in range(9, 40):
+        half = 11 + (y - 9) * 27 // 31
         for x in range(36 - half, 36 + half):
             col = roof
-            if row % 2 == 0: col = roof_d if (x // 5) % 2 == 0 else roof
-            if (x + row * 3) % 7 == 0: col = roof_l
-            c.set(x, y, col); c.set(x, y + 1, col)
-        for x in range(36 - half, 36 + half, 5):
-            c.set(x, y + 2, roof_d)
-    c.rect(36 - 12, 8, 24, 3, roof_l)
+            if (x + (y // 5) * 3) % 6 == 0: col = roof_d
+            if y % 5 == 0: col = roof_d
+            if y % 5 == 1: col = roof_l if (x // 4) % 2 else roof
+            c.set(x, y, col)
+    # конёк и свес
+    c.rect(36 - 12, 8, 24, 2, roof_l)
+    c.rect(36 - 27, 39, 54, 2, roof_d)
+    c.rect(36 - 28, 40, 56, 1, roof)
     # труба
     c.rect(48, 8, 7, 14, rgb('#8a6a55')); c.rect(47, 6, 9, 3, rgb('#6e523f'))
     for y in range(9, 22, 3): c.rect(48, y, 7, 1, rgb('#755844'))

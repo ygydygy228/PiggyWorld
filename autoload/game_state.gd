@@ -47,6 +47,7 @@ var sanity: float = MAX_STAT
 var has_vest: bool = false
 var spear_uses: int = 0
 var fresh: Dictionary = {}
+var hearts: Dictionary = {}
 var _icon_cache: Dictionary = {}
 
 
@@ -66,6 +67,7 @@ func reset() -> void:
 	has_vest = false
 	spear_uses = 0
 	fresh = {}
+	hearts = {}
 	EventBus.money_changed.emit(money)
 	EventBus.inventory_changed.emit()
 	EventBus.tool_changed.emit(selected_tool)
@@ -192,6 +194,17 @@ func use_weapon() -> void:
 			EventBus.message.emit("Копьё сломалось!")
 
 
+func npc_hearts(id: String) -> int:
+	return int(hearts.get(id, 0))
+
+
+## Каждый разговор немного сближает; максимум 5 сердец.
+func add_heart(id: String) -> int:
+	hearts[id] = mini(5, npc_hearts(id) + 1)
+	EventBus.stats_changed.emit()
+	return int(hearts[id])
+
+
 func add_money(amount: int) -> void:
 	money = maxi(0, money + amount)
 	EventBus.money_changed.emit(money)
@@ -228,7 +241,7 @@ func to_dict() -> Dictionary:
 	return {
 		"money": money, "inventory": inventory, "selected_tool": selected_tool,
 		"hardcore": hardcore, "health": health, "hunger": hunger, "sanity": sanity,
-		"has_vest": has_vest, "spear_uses": spear_uses, "fresh": fresh,
+		"has_vest": has_vest, "spear_uses": spear_uses, "fresh": fresh, "hearts": hearts,
 	}
 
 
@@ -246,6 +259,7 @@ func from_dict(d: Dictionary) -> void:
 	sanity = clampf(float(d.get("sanity", MAX_STAT)), 0.0, MAX_STAT)
 	has_vest = bool(d.get("has_vest", false))
 	spear_uses = int(d.get("spear_uses", 0))
+	hearts = d.get("hearts", {})
 	fresh = {}
 	var fr: Dictionary = d.get("fresh", {})
 	for k in fr:
