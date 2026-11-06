@@ -27,6 +27,7 @@ var _kb: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
+	add_to_group("player")
 	sprite = AnimatedSprite2D.new()
 	sprite.sprite_frames = PigFrames.build()
 	sprite.centered = false

@@ -9,6 +9,7 @@ const Animal := preload("res://scripts/animals/animal.gd")
 const Npc := preload("res://scripts/world/npc.gd")
 const Buildings := preload("res://scripts/world/buildings.gd")
 const Survival := preload("res://scripts/systems/survival.gd")
+const Critters := preload("res://scripts/fx/critters.gd")
 
 const MAP_W := 128
 const MAP_H := 96
@@ -27,7 +28,7 @@ const VILLAGE_RECT := Rect2i(60, 26, 20, 20)
 const CAVE_CELL := Vector2i(48, 19)
 const LAKE_CENTER := Vector2(52, 52)
 
-## per — сколько дней с поливом нужно на одну стадию роста (всего 3 стадии роста).
+## per - сколько дней с поливом нужно на одну стадию роста (всего 3 стадии роста).
 const CROPS := {
 	"carrot": {"seed": "carrot_seed", "item": "carrot", "per": 1, "max": 2, "fx": Color("#f08a2c")},
 	"turnip": {"seed": "turnip_seed", "item": "turnip", "per": 1, "max": 2, "fx": Color("#9a5ab0")},
@@ -79,6 +80,7 @@ var ghost: Sprite2D
 var rng := RandomNumberGenerator.new()
 
 var tileset: TileSet
+var world_seed: int = SEED
 var ground_mat: ShaderMaterial
 var foliage_mat: ShaderMaterial
 var water_layer: TileMapLayer
@@ -94,8 +96,12 @@ var weather_fx: WeatherFx
 
 
 func _ready() -> void:
-	rng.seed = SEED
 	var saved: Dictionary = SaveSystem.pending.get("world", {})
+	# Новый мир каждый раз новый; в сохранении живёт его сид.
+	world_seed = int(saved.get("seed", 0))
+	if world_seed == 0:
+		world_seed = randi()
+	rng.seed = world_seed
 	for u in saved.get("removed", []):
 		removed_uids[str(u)] = true
 	_make_materials()
@@ -111,6 +117,9 @@ func _ready() -> void:
 	_restore_farm(saved)
 	_build_room()
 	_spawn_player(saved)
+	var critters := Critters.new()
+	critters.setup(player)
+	add_child(critters)
 	survival = Survival.new()
 	survival.setup(self)
 	add_child(survival)
@@ -234,7 +243,7 @@ func is_blocked(p: Vector2) -> bool:
 func _generate_terrain() -> void:
 	terrain.resize(MAP_W * MAP_H)
 	var noise := FastNoiseLite.new()
-	noise.seed = SEED
+	noise.seed = world_seed
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	noise.frequency = 0.05
 	noise.fractal_octaves = 3
@@ -657,6 +666,7 @@ func serialize() -> Dictionary:
 	for c in crops:
 		crop_list.append({"x": c.x, "y": c.y, "type": crops[c]["type"], "age": crops[c]["age"], "stage": crops[c]["stage"], "watered": crops[c]["watered"]})
 	return {
+		"seed": world_seed,
 		"removed": removed_uids.keys(),
 		"soil": soil_list,
 		"crops": crop_list,
@@ -946,13 +956,24 @@ func _make_room_texture() -> Texture2D:
 func _apply_camera_limits() -> void:
 	var cam: Camera2D = player.camera
 	if indoors:
-		var vs := get_viewport().get_visible_rect().size
+		# Внутри дома камера приближена: комната целиком влезает в кадр.
+		cam.zoom = Vector2(2, 2)
+		var vs := get_viewport().get_visible_rect().size / cam.zoom
 		var c := ROOM_ORIGIN + Vector2(ROOM_W, ROOM_H) / 2.0
-		cam.limit_left = int(c.x - vs.x / 2.0)
-		cam.limit_right = int(c.x + vs.x / 2.0)
-		cam.limit_top = int(c.y - vs.y / 2.0)
-		cam.limit_bottom = int(c.y + vs.y / 2.0)
+		if ROOM_W <= vs.x:
+			cam.limit_left = int(c.x)
+			cam.limit_right = int(c.x)
+		else:
+			cam.limit_left = int(c.x - vs.x / 2.0)
+			cam.limit_right = int(c.x + vs.x / 2.0)
+		if ROOM_H <= vs.y:
+			cam.limit_top = int(c.y)
+			cam.limit_bottom = int(c.y)
+		else:
+			cam.limit_top = int(c.y - vs.y / 2.0)
+			cam.limit_bottom = int(c.y + vs.y / 2.0)
 	else:
+		cam.zoom = Vector2(1, 1)
 		cam.limit_left = 0
 		cam.limit_top = 0
 		cam.limit_right = MAP_W * TILE

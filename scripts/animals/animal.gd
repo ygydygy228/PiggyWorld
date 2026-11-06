@@ -111,7 +111,7 @@ func _wander(delta: float) -> void:
 		if _stuck > 0.6:
 			_go("idle", 1.5)
 	if absf(velocity.x) > 0.1 or absf(velocity.y) > 0.1:
-		# по горизонтали — профиль (с отражением), по вертикали — вид спереди
+		# по горизонтали - профиль (с отражением), по вертикали - вид спереди
 		_front = absf(velocity.y) > absf(velocity.x)
 		if not _front:
 			sprite.flip_h = velocity.x < 0.0

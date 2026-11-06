@@ -1,5 +1,5 @@
 extends StaticBody2D
-## Житель деревни. Разговор открывает диалог; у лавочницы после диалога — магазин.
+## Житель деревни. Разговор открывает диалог; у лавочницы после диалога - магазин.
 
 const DEFS := {
 	"shopkeeper": {
@@ -19,6 +19,7 @@ const DEFS := {
 var npc_id: String = "shopkeeper"
 var sprite: AnimatedSprite2D
 var _talk_t: float = 0.0
+var _greet_cd: float = randf_range(3.0, 9.0)
 
 
 func setup(id: String, pos: Vector2) -> void:
@@ -75,6 +76,35 @@ func _process(delta: float) -> void:
 		_talk_t -= delta
 		if _talk_t <= 0.0:
 			sprite.play("idle")
+	_greet_cd -= delta
+	if _greet_cd <= 0.0:
+		_greet_cd = 1.0
+		var p := get_tree().get_first_node_in_group("player")
+		if p != null and global_position.distance_to((p as Node2D).global_position) < 36.0:
+			_greet_cd = randf_range(25.0, 45.0)
+			_greet(p as Node2D)
+
+
+func _greet(p: Node2D) -> void:
+	if _talk_t > 0.0:
+		return
+	sprite.flip_h = p.global_position.x < global_position.x
+	sprite.play("talk")
+	_talk_t = 1.6
+	AudioManager.play("ui_click", 0.35, 0.4)
+	var b := Label.new()
+	b.text = "!"
+	b.add_theme_color_override("font_color", Color("#ffd26a"))
+	b.add_theme_font_size_override("font_size", 12)
+	b.position = Vector2(-3, -46)
+	b.z_index = 50
+	add_child(b)
+	var rise := create_tween()
+	rise.tween_property(b, "position:y", -58.0, 0.9)
+	var fade := create_tween()
+	fade.tween_interval(0.35)
+	fade.tween_property(b, "modulate:a", 0.0, 0.55)
+	fade.tween_callback(b.queue_free)
 
 
 func _lines(def: Dictionary) -> Array:

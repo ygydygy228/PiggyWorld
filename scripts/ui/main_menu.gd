@@ -111,8 +111,8 @@ func _build_pig() -> void:
 	_pig.sprite_frames = PigFrames.build()
 	_pig.centered = false
 	_pig.offset = Vector2(-PigMeta.FRAME_W / 2.0, -PigMeta.GROUND_Y)
-	_pig.scale = Vector2(2.8, 2.8)
-	_pig.position = Vector2(252, 248)
+	_pig.scale = Vector2(2.2, 2.2)
+	_pig.position = Vector2(262, 244)
 	add_child(_pig)
 	_pig.play("idle_down")
 
@@ -125,7 +125,7 @@ func _build_footer() -> void:
 	strip.offset_bottom = 0
 	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(strip)
-	var hint := UiTheme.label("WASD — движение, пробел — действие, тач — на телефоне", UiTheme.MUTED, 9)
+	var hint := UiTheme.label("WASD · пробел · тач", UiTheme.MUTED, 9)
 	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 6)
 	add_child(hint)
 	var save_info := UiTheme.label(_save_text(), UiTheme.MUTED, 9)
@@ -139,7 +139,7 @@ func _build_footer() -> void:
 func _save_text() -> String:
 	if not SaveSystem.has_save():
 		return "новое хозяйство"
-	return "есть сохранение — нажми «Продолжить»"
+	return "есть сохранение - нажми «Продолжить»"
 
 
 func _build_settings() -> void:
