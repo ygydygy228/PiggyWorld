@@ -1,5 +1,7 @@
 """Животные и жители деревни. Запуск: python3 tools/gen_animals.py
-Листы животных: assets/sprites/animals/<вид>.png (кадр 32x32, строки: idle, walk, eat, sleep; 4 колонки; смотрят вправо).
+Листы животных: assets/sprites/animals/<вид>.png (кадр 32x32, 4 колонки).
+Строки: idle, walk, eat, sleep, happy — профиль (смотрят вправо);
+        idle_front, walk_front, eat_front, happy_front — вид спереди.
 Жители: assets/sprites/npc/<имя>.png (кадр 24x32, 3 кадра: idle, idle2, talk)."""
 import math, os, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -7,7 +9,8 @@ from pixel_lib import Canvas, rgb
 
 OUT = rgb('#3b2a2e')
 GY = 28  # земля
-ANIMS = [('idle', 4), ('walk', 4), ('eat', 4), ('sleep', 2)]
+SIDE_ANIMS = [('idle', 4), ('walk', 4), ('eat', 4), ('sleep', 2), ('happy', 4)]
+FRONT_ANIMS = [('idle_front', 4), ('walk_front', 4), ('eat_front', 4), ('happy_front', 4)]
 EYE, WHITE = rgb('#2c1828'), rgb('#ffffff')
 PINK, PINK_D = rgb('#f4a5b5'), rgb('#dd7998')
 
@@ -27,7 +30,7 @@ def leg(c, x, top, w, col, hoof, lift=0, hoof_h=1, bottom=GY):
         c.rect(x, bottom - lift - hoof_h, w, hoof_h, hoof)
 
 def params(anim, f, sp):
-    p = {'bob': 0, 'hdx': 0, 'hdy': 0, 'lifts': [0, 0, 0, 0], 'eyes': 'open', 'tail': f % 2, 'sleep': False}
+    p = {'bob': 0, 'hdx': 0, 'hdy': 0, 'lifts': [0, 0, 0, 0], 'eyes': 'open', 'tail': f % 2, 'sleep': False, 'hearts': 0}
     if anim == 'idle':
         p['bob'] = [0, 0, 1, 0][f]
         if f == 2: p['eyes'] = 'closed'
@@ -42,12 +45,52 @@ def params(anim, f, sp):
         p['hdy'] = [0, 3, 5, 3][f]; p['hdx'] = [0, 1, 2, 1][f]
     elif anim == 'sleep':
         p['sleep'] = True; p['eyes'] = 'closed'; p['bob'] = [3, 4][f]
+    elif anim == 'happy':
+        # подпрыгивает от радости и виляет хвостом
+        p['bob'] = [1, -3, -2, 0][f]
+        p['eyes'] = 'happy'
+        p['tail'] = 1 if f % 2 else 0
+        p['hearts'] = [1, 2, 2, 1][f]
+    return p
+
+
+def params_front(anim, f, sp):
+    p = {'bob': 0, 'hdy': 0, 'lifts': [0, 0], 'eyes': 'open', 'sway': 0, 'hearts': 0}
+    if anim == 'idle_front':
+        p['bob'] = [0, 0, 1, 0][f]
+        if f == 2: p['eyes'] = 'closed'
+    elif anim == 'walk_front':
+        ph = f / 4 * 2 * math.pi
+        p['lifts'] = [int(round(max(0.0, math.sin(ph)) * 2)), int(round(max(0.0, math.sin(ph + math.pi)) * 2))]
+        p['bob'] = -int(round(abs(math.sin(ph))))
+        p['sway'] = int(round(math.sin(ph)))
+        if sp == 'rabbit':
+            p['bob'] = -int(round(abs(math.sin(ph)) * 4)); p['lifts'] = [0, 0]
+    elif anim == 'eat_front':
+        p['hdy'] = [0, 3, 5, 3][f]
+    elif anim == 'happy_front':
+        p['bob'] = [1, -3, -2, 0][f]
+        p['eyes'] = 'happy'
+        p['hearts'] = [1, 2, 2, 1][f]
     return p
 
 def eye(c, x, y, state, col=EYE):
-    if state == 'closed': c.rect(x - 1, y + 1, 2, 1, col)
+    if state == 'closed':
+        c.rect(x - 1, y + 1, 2, 1, col)
+    elif state == 'happy':
+        # радостно зажмуренные глаза: галочка ^
+        c.set(x - 1, y + 1, col); c.set(x, y, col); c.set(x + 1, y + 1, col)
     else:
         c.rect(x, y, 2, 2, col); c.set(x + 1, y, WHITE)
+
+
+def hearts(c, spots, n):
+    """Сердечки над головой: 3x3 пикселя, появляются по одному."""
+    col, hi = rgb('#f2647e'), rgb('#ffc2cf')
+    for i, (hx, hy) in enumerate(spots[:n]):
+        for dx, dy in ((0, 0), (2, 0), (0, 1), (1, 1), (2, 1), (1, 2)):
+            c.set(hx + dx, hy + dy, col)
+        c.set(hx, hy, hi)
 
 # ---------------------------------------------------------------- виды
 def cow(c, p):
@@ -189,12 +232,140 @@ def chicken(c, p):
 SPECIES = {'cow': cow, 'sheep': sheep, 'dog': dog, 'cat': cat, 'rabbit': rabbit, 'chicken': chicken}
 SHADOW = {'cow': 11, 'sheep': 10, 'dog': 9, 'cat': 8, 'rabbit': 7, 'chicken': 7}
 
+# ---------------------------------------------------------------- вид спереди
+# Животное смотрит на камеру: голова светлее тела и отделена тенью под подбородком,
+# уши, глаза и морда симметричны.
+def neck(c, cx, cy, rx, ry, col=OUT):
+    """Тёмная нижняя дуга головы: голова читается отдельно от тела."""
+    for x in range(int(cx - rx) - 1, int(cx + rx) + 2):
+        t = (x + 0.5 - cx) / rx
+        if abs(t) > 1.0:
+            continue
+        c.set(x, int(round(cy + ry * math.sqrt(1.0 - t * t) - 0.5)), col)
+
+def front_cow(c, p):
+    b, hy, s = p['bob'], 10 + p['bob'] + p['hdy'], p['sway']
+    W, WS, WL = rgb('#f4f1ea'), rgb('#d6d0c3'), rgb('#ffffff')
+    K, HOOF = rgb('#34343a'), rgb('#4a4040')
+    L, top = p['lifts'], 24 + b
+    for i in range(4): c.set(27 + s, 15 + b + i, K)  # хвост
+    c.ellipse(16, 21 + b, 9.5, 5.8, W, WS, WL)  # тело
+    for sx, sy, rx, ry in ((11, 19, 3, 2.2), (21, 21, 2.4, 1.8), (15, 24, 1.8, 1.4)):
+        c.ellipse(sx, sy + b, rx, ry, K)  # пятна
+    leg(c, 10, top, 3, W, HOOF, L[0]); leg(c, 19, top, 3, W, HOOF, L[1])
+    c.ellipse(16, hy, 5.8, 5.0, WL, W, WL)  # голова светлее тела
+    neck(c, 16, hy, 5.8, 5.0)
+    c.rect(10, hy - 7, 2, 2, rgb('#efe4c4')); c.rect(20, hy - 7, 2, 2, rgb('#efe4c4'))  # рожки
+    c.ellipse(9.5, hy - 1, 2.6, 2.0, WL, W); c.ellipse(22.5, hy - 1, 2.6, 2.0, WL, W)  # уши
+    c.ellipse(16, hy + 3, 3.0, 2.2, PINK, PINK_D)  # морда
+    c.set(15, hy + 3, rgb('#7a3550')); c.set(17, hy + 3, rgb('#7a3550'))
+    eye(c, 12, hy - 2, p['eyes']); eye(c, 18, hy - 2, p['eyes'])
+
+def front_sheep(c, p):
+    b, hy, s = p['bob'], 12 + p['bob'] + p['hdy'], p['sway']
+    WO, WS, WL = rgb('#f4f1e8'), rgb('#d3cdbd'), rgb('#ffffff')
+    D, HOOF = rgb('#55453f'), rgb('#3a2e2a')
+    L, top = p['lifts'], 24 + b
+    for bx, by, rx, ry in ((16, 21, 9.5, 5.6), (10, 18, 4.5, 4), (22, 18, 4.5, 4),
+                           (16, 16.5, 5.5, 4), (16, 24.5, 8, 3.4)):
+        c.ellipse(bx + s, by + b, rx, ry, WO, WS, WL, 0.4, -0.35)  # шерсть
+    leg(c, 10, top, 3, D, HOOF, L[0]); leg(c, 19, top, 3, D, HOOF, L[1])
+    c.ellipse(16 + s, hy, 5.2, 4.6, D)  # тёмная голова
+    c.ellipse(16 + s, hy - 3.2, 3.2, 1.8, WO, WS)  # чёлка
+    c.ellipse(10 + s, hy + 1, 1.8, 2.4, D); c.ellipse(22 + s, hy + 1, 1.8, 2.4, D)  # уши
+    for ex in (12, 18):
+        if p['eyes'] == 'open':
+            c.rect(ex + s, hy - 1, 2, 2, WHITE); c.set(ex + s, hy - 1, EYE)
+        else:
+            eye(c, ex + s, hy - 1, p['eyes'], WHITE)
+    c.set(16 + s, hy + 3, rgb('#2a1f1c'))
+
+def front_dog(c, p):
+    b, hy, s = p['bob'], 10 + p['bob'] + p['hdy'], p['sway']
+    B, BS, BL = rgb('#c58a4a'), rgb('#9d6a35'), rgb('#dba767')
+    DK, SN, HOOF = rgb('#7a4a22'), rgb('#e6c08a'), rgb('#f2e2c4')
+    L, top = p['lifts'], 24 + b
+    for dx, dy in ((0, 0), (1, 1), (1, 2), (2, 3)): c.rect(25 + dx + s, 15 + b + dy, 2, 2, B)  # хвост
+    c.ellipse(16 + s, 21 + b, 8.5, 5.6, B, BS, BL)  # тело
+    c.ellipse(16 + s, 23 + b, 4.6, 2.8, rgb('#e6c08a'))  # грудка
+    leg(c, 10, top, 3, B, HOOF, L[0]); leg(c, 19, top, 3, B, HOOF, L[1])
+    c.ellipse(16 + s, hy, 5.4, 4.8, BL, B, BL)  # голова светлее
+    neck(c, 16 + s, hy, 5.4, 4.8)
+    c.ellipse(10.5 + s, hy + 1, 2.4, 3.6, DK); c.ellipse(21.5 + s, hy + 1, 2.4, 3.6, DK)  # висячие уши
+    c.ellipse(16 + s, hy + 2.5, 3.2, 2.4, SN)  # морда
+    c.rect(15 + s, hy + 2, 2, 2, rgb('#2a1f1c'))
+    eye(c, 12 + s, hy - 2, p['eyes']); eye(c, 18 + s, hy - 2, p['eyes'])
+
+def front_cat(c, p):
+    b, hy, s = p['bob'], 11 + p['bob'] + p['hdy'], p['sway']
+    B, BS, BL = rgb('#e08a3c'), rgb('#b8601e'), rgb('#f0a85c')
+    CREAM = rgb('#f6e6cf')
+    L, top = p['lifts'], 24 + b
+    for dx, dy in ((0, 0), (1, 0), (1, 1), (2, 1), (2, 2)): c.rect(24 + dx + s, 19 + b + dy, 2, 2, B)  # хвост
+    c.ellipse(16 + s, 21 + b, 7.6, 5.0, B, BS, BL)  # тело
+    for sx in (13, 19): c.rect(sx + s, 18 + b, 1, 3, BS)  # полоски
+    leg(c, 11, top, 3, B, CREAM, L[0]); leg(c, 18, top, 3, B, CREAM, L[1])
+    for cx in (12, 20):  # уши-треугольники
+        for i, w in enumerate((2, 3, 4)):
+            c.rect(cx + s - w // 2, hy - 7 + i, w, 1, B)
+        c.set(cx + s, hy - 6, PINK)
+    c.ellipse(16 + s, hy, 5.0, 4.4, BL, B, BL)  # голова светлее
+    neck(c, 16 + s, hy, 5.0, 4.4)
+    c.rect(14 + s, hy + 2, 5, 1, rgb('#f6d9b0'))  # светлая мордочка
+    c.set(16 + s, hy + 2, PINK); c.set(16 + s, hy + 3, PINK_D)  # нос
+    eye(c, 12 + s, hy - 2, p['eyes'], rgb('#2c4a1c')); eye(c, 18 + s, hy - 2, p['eyes'], rgb('#2c4a1c'))
+
+def front_rabbit(c, p):
+    b, hy, s = p['bob'], 14 + p['bob'] + p['hdy'], p['sway']
+    W, WS, WL = rgb('#e8dcc8'), rgb('#c4b69c'), rgb('#ffffff')
+    ear_dy = 2 if p['anim'] == 'eat_front' else 0
+    c.ellipse(24 + s, 23 + b, 1.8, 1.8, WL, WS)  # хвостик
+    c.ellipse(16 + s, 22 + b, 7, 5, W, WS, WL)  # тело
+    c.ellipse(11 + s, 27, 2.6, 1.6, W, WS); c.ellipse(20 + s, 27, 2.6, 1.6, W, WS)  # лапы
+    c.ellipse(13 + s, hy - 7 + ear_dy, 1.7, 4.4, WL, W, WL)  # уши
+    c.ellipse(13 + s, hy - 7 + ear_dy, 0.8, 3.2, PINK)
+    c.ellipse(19 + s, hy - 7 + ear_dy, 1.7, 4.2, WL, W, WL)
+    c.ellipse(19 + s, hy - 7 + ear_dy, 0.8, 3.0, PINK)
+    c.ellipse(16 + s, hy, 4.4, 3.8, WL, W, WL)  # голова светлее
+    neck(c, 16 + s, hy, 4.4, 3.8)
+    c.set(16 + s, hy + 1, PINK_D)
+    eye(c, 12 + s, hy - 2, p['eyes']); eye(c, 18 + s, hy - 2, p['eyes'])
+
+def front_chicken(c, p):
+    b, hy, s = p['bob'], 11 + p['bob'] + p['hdy'], p['sway']
+    W, WS, WL = rgb('#f7f4ee'), rgb('#d9d4c8'), rgb('#ffffff')
+    OR, RD = rgb('#f4a02c'), rgb('#e23b3b')
+    c.ellipse(16 + s, 21 + b, 7, 5.8, W, WS, WL)  # тело
+    c.rect(14 + s, 25 + b, 1, GY - 25 - b, OR); c.rect(17 + s, 25 + b, 1, GY - 25 - b, OR)  # лапы
+    c.ellipse(11 + s, 21 + b, 2.6, 3.2, rgb('#e6dfd0'), rgb('#cfc8b8'))  # крылья
+    c.ellipse(21 + s, 21 + b, 2.6, 3.2, rgb('#e6dfd0'), rgb('#cfc8b8'))
+    c.ellipse(16 + s, hy, 4.0, 3.8, WL, W, WL)  # голова светлее
+    neck(c, 16 + s, hy, 4.0, 3.8)
+    for dx, dy in ((-1, -5), (0, -6), (0, -5), (1, -5)): c.set(16 + s + dx, hy + dy, RD)  # гребешок
+    c.rect(15 + s, hy + 2, 3, 1, OR); c.rect(16 + s, hy + 3, 1, 1, rgb('#d98414'))  # клюв
+    eye(c, 13 + s, hy - 2, p['eyes']); eye(c, 18 + s, hy - 2, p['eyes'])
+
+FRONT_SPECIES = {'cow': front_cow, 'sheep': front_sheep, 'dog': front_dog,
+                 'cat': front_cat, 'rabbit': front_rabbit, 'chicken': front_chicken}
+SHADOW_F = {'cow': 11, 'sheep': 11, 'dog': 10, 'cat': 9, 'rabbit': 8, 'chicken': 8}
+FRONT_NAMES = {name for name, _ in FRONT_ANIMS}
+HEARTS_SIDE = [(23, 2), (27, 5)]
+HEARTS_FRONT = [(16, 1), (10, 4)]
+
 def render(sp, anim, f):
     c = Canvas(32, 32)
-    p = params(anim, f, sp); p['anim'] = anim
-    SPECIES[sp](c, p)
-    c.outline(OUT)
-    shadow(c, 14, GY + 1, SHADOW[sp], 2)
+    if anim in FRONT_NAMES:
+        p = params_front(anim, f, sp); p['anim'] = anim
+        FRONT_SPECIES[sp](c, p)
+        c.outline(OUT)
+        hearts(c, HEARTS_FRONT, p['hearts'])
+        shadow(c, 16, GY + 1, SHADOW_F[sp], 2)
+    else:
+        p = params(anim, f, sp); p['anim'] = anim
+        SPECIES[sp](c, p)
+        c.outline(OUT)
+        hearts(c, HEARTS_SIDE, p['hearts'])
+        shadow(c, 14, GY + 1, SHADOW[sp], 2)
     return c
 
 # ---------------------------------------------------------------- жители
@@ -244,9 +415,10 @@ def main():
     root = os.path.join(os.path.dirname(__file__), '..', 'assets', 'sprites')
     os.makedirs(os.path.join(root, 'animals'), exist_ok=True)
     os.makedirs(os.path.join(root, 'npc'), exist_ok=True)
+    rows = SIDE_ANIMS + FRONT_ANIMS
     for sp in SPECIES:
-        sheet = Canvas(4 * 32, len(ANIMS) * 32)
-        for r, (anim, n) in enumerate(ANIMS):
+        sheet = Canvas(4 * 32, len(rows) * 32)
+        for r, (anim, n) in enumerate(rows):
             for f in range(n):
                 sheet.paste(render(sp, anim, f), f * 32, r * 32)
         sheet.img.save(os.path.join(root, 'animals', sp + '.png'))

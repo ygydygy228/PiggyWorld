@@ -22,6 +22,7 @@ var _t: float = 2.0
 var _target: Vector2 = Vector2.ZERO
 var _stuck: float = 0.0
 var _voice_t: float = 15.0
+var _front: bool = false  # животное смотрит на камеру (движется по вертикали)
 
 
 func setup(p_species: String, p_home: Vector2, p_world) -> void:
@@ -35,7 +36,12 @@ static func _frames(sp: String) -> SpriteFrames:
 	var sheet: Texture2D = load("res://assets/sprites/animals/%s.png" % sp)
 	var sf := SpriteFrames.new()
 	sf.remove_animation("default")
-	var rows := [["idle", 0, 4, 3.0], ["walk", 1, 4, 7.0], ["eat", 2, 4, 4.0], ["sleep", 3, 2, 1.5]]
+	var rows := [
+		["idle", 0, 4, 3.0], ["walk", 1, 4, 7.0], ["eat", 2, 4, 4.0], ["sleep", 3, 2, 1.5],
+		["happy", 4, 4, 6.0],
+		["idle_front", 5, 4, 3.0], ["walk_front", 6, 4, 7.0], ["eat_front", 7, 4, 4.0],
+		["happy_front", 8, 4, 6.0],
+	]
 	for r in rows:
 		var anim: String = r[0]
 		sf.add_animation(anim)
@@ -104,8 +110,11 @@ func _wander(delta: float) -> void:
 		_stuck += delta
 		if _stuck > 0.6:
 			_go("idle", 1.5)
-	if absf(velocity.x) > 0.1:
-		sprite.flip_h = velocity.x < 0.0
+	if absf(velocity.x) > 0.1 or absf(velocity.y) > 0.1:
+		# по горизонтали — профиль (с отражением), по вертикали — вид спереди
+		_front = absf(velocity.y) > absf(velocity.x)
+		if not _front:
+			sprite.flip_h = velocity.x < 0.0
 
 
 func _choose() -> void:
@@ -141,8 +150,19 @@ func _update_anim() -> void:
 			anim = "eat"
 		"sleep":
 			anim = "sleep"
+		"happy":
+			anim = "happy"
+	if anim != "sleep" and _front:
+		anim += "_front"
 	if sprite.animation != anim:
 		sprite.play(anim)
+
+
+func _face_towards(p: Vector2) -> void:
+	var d := p - global_position
+	_front = absf(d.y) >= absf(d.x)
+	if not _front:
+		sprite.flip_h = d.x < 0.0
 
 
 func _speak() -> void:
@@ -160,9 +180,9 @@ func refill() -> void:
 ## Игрок гладит животное. Возвращает реакцию свинки.
 func interact() -> String:
 	var def: Dictionary = SPECIES[species]
-	_go("idle", 2.0)
+	_go("happy", 1.2)
 	if world != null and world.player != null:
-		sprite.flip_h = world.player.global_position.x < global_position.x
+		_face_towards(world.player.global_position)
 	Fx.burst(get_parent(), position + Vector2(0, -22), Color("#eb4664"), 4, 22.0, 0.9)
 	AudioManager.play(str(def["sound"]), 0.05, 0.9)
 	var prod := str(def["product"])
