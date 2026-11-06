@@ -9,6 +9,7 @@ const UiTheme := preload("res://scripts/ui/ui_theme.gd")
 var speaker: String = ""
 var lines: Array = []
 var choices: Array = []
+var hearts: int = 0
 var _index: int = 0
 var _label: Label
 var _hint: Label
@@ -25,10 +26,11 @@ func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
-func setup(p_speaker: String, p_lines: Array, p_choices: Array = []) -> void:
+func setup(p_speaker: String, p_lines: Array, p_choices: Array = [], p_hearts: int = 0) -> void:
 	speaker = p_speaker
 	lines = p_lines
 	choices = p_choices
+	hearts = p_hearts
 
 
 func _ready() -> void:
@@ -68,6 +70,9 @@ func _ready() -> void:
 	head.add_child(marker)
 	var name_label := UiTheme.label(speaker, UiTheme.GOLD, 12)
 	head.add_child(name_label)
+	if hearts > 0:
+		for i in range(hearts):
+			head.add_child(UiTheme.icon("stat_health", 10))
 
 	_label = UiTheme.label("", UiTheme.TEXT, 11)
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

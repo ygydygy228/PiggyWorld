@@ -9,7 +9,7 @@ signal clock_changed(day: int, hour: int, minute: int)
 signal day_started(day: int)
 signal weather_changed(kind: String)
 signal item_collected(id: String, amount: int)
-signal dialog_requested(speaker: String, lines: Array, action: String)
+signal dialog_requested(speaker: String, lines: Array, action: String, hearts: int)
 signal build_menu_requested
 signal backpack_requested
 signal campfire_requested(obj: Node)

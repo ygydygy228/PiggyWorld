@@ -158,7 +158,7 @@ func _leave_to_menu() -> void:
 
 # ---------------------------------------------------------------- диалоги и магазин
 
-func _on_dialog(speaker: String, lines: Array, action: String) -> void:
+func _on_dialog(speaker: String, lines: Array, action: String, hearts: int = 0) -> void:
 	if _busy():
 		return
 	_set_paused(true)
@@ -166,7 +166,7 @@ func _on_dialog(speaker: String, lines: Array, action: String) -> void:
 	if action == "sleep":
 		choices = ["Лечь спать", "Ещё нет"]
 	var d := DialogBox.new()
-	d.setup(speaker, lines, choices)
+	d.setup(speaker, lines, choices, hearts)
 	# сигналы подключаем до add_child: _ready может сразу завершить диалог
 	_overlay = d
 	if choices.is_empty():

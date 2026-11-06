@@ -561,7 +561,7 @@ func harvest_at(target: Vector2) -> String:
 	if o != null and o.interaction() == "bed":
 		var hour := TimeSystem.hour()
 		if hour >= 18 or hour < 5:
-			EventBus.dialog_requested.emit("Кровать", ["Свинка зевает. Одеяло выглядит очень уютно..."], "sleep")
+			EventBus.dialog_requested.emit("Кровать", ["Свинка зевает. Одеяло выглядит очень уютно..."], "sleep", 0)
 			return "talk"
 		EventBus.message.emit("Спать пока не хочется (после 18:00)")
 		return "sad"

@@ -128,5 +128,14 @@ func interact() -> String:
 	sprite.play("talk")
 	_talk_t = 2.5
 	AudioManager.play("ui_click", 0.05, 0.7)
-	EventBus.dialog_requested.emit(str(def["name"]), _lines(def), str(def["action"]))
+	var hearts := GameState.add_heart(npc_id)
+	var lines := _lines(def)
+	var action := str(def["action"])
+	# лавка работает днём: ночью Мила только извиняется
+	if action == "shop" and (TimeSystem.time_of_day < 0.29 or TimeSystem.time_of_day > 0.84):
+		action = ""
+		lines = ["Ой, уже поздно - лавка закрыта.", "Приходи днём, с семи утра. Я всегда рада тебя видеть!"]
+	elif action == "shop" and hearts >= 3:
+		lines.append("Кстати, для друзей у меня всегда есть скидка... шучу! Но заходи чаще.")
+	EventBus.dialog_requested.emit(str(def["name"]), lines, action, hearts)
 	return "talk"
