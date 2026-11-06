@@ -302,6 +302,22 @@ def house():
     return c
 
 
+def chest():
+    c = Canvas(T, T)
+    wood, wd, wl = rgb('#8a5a34'), rgb('#5f3a1f'), rgb('#b07a48')
+    gold, gold_d = rgb('#f4c542'), rgb('#b27c14')
+    c.rect(2, 6, 12, 9, wood)
+    c.rect(2, 6, 12, 3, wl)      # крышка
+    c.rect(2, 8, 12, 1, wd)
+    c.rect(2, 6, 12, 1, gold_d)
+    c.rect(2, 5, 12, 1, rgb('#3a2a1f'))
+    c.rect(4, 9, 1, 6, wd); c.rect(11, 9, 1, 6, wd)
+    c.rect(7, 8, 2, 4, gold); c.set(7, 9, gold_d); c.set(8, 9, gold_d)  # замок
+    c.rect(2, 14, 12, 1, rgb('#3a2a1f'))
+    c.outline(rgb('#2f241c'))
+    return c
+
+
 def crop(stage, kind='carrot'):
     c = Canvas(T, T)
     c.ellipse(8, 13, 5, 2.2, rgb('#7a4f2e'), rgb('#5c3a22'), None)
@@ -347,6 +363,7 @@ def main():
     save('house', house())
     for s in range(4): save(f'crop_carrot_{s}', crop(s))
     save('fence', fence())
+    save('chest', chest())
     print('ok')
 
 if __name__ == '__main__':

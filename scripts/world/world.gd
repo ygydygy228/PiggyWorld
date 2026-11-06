@@ -43,6 +43,7 @@ const ANIMAL_SPOTS := [
 const NPC_HOMES := {"shopkeeper": Vector2i(65, 31), "granny": Vector2i(73, 34), "farmer": Vector2i(66, 41)}
 
 const ROOM_ORIGIN := Vector2(4096, 0)
+const CAVE_ROOM_ORIGIN := Vector2(4096, 320)
 const ROOM_W := 288
 const ROOM_H := 176
 const HOUSE_DOOR_OUT := Vector2(648, 590)
@@ -72,6 +73,8 @@ var removed_uids: Dictionary = {}
 var animals: Array = []
 var built: Dictionary = {}
 var indoors: bool = false
+var in_cave: bool = false
+var cave_looted: bool = false
 var survival: Survival
 var nav: AStarGrid2D
 var _transitioning: bool = false
@@ -99,6 +102,7 @@ func _ready() -> void:
 	var saved: Dictionary = SaveSystem.pending.get("world", {})
 	# Новый мир каждый раз новый; в сохранении живёт его сид.
 	world_seed = int(saved.get("seed", 0))
+	cave_looted = bool(saved.get("cave_looted", false))
 	if world_seed == 0:
 		world_seed = randi()
 	rng.seed = world_seed
@@ -116,6 +120,7 @@ func _ready() -> void:
 	_spawn_creatures(saved)
 	_restore_farm(saved)
 	_build_room()
+	_build_cave_room()
 	_spawn_player(saved)
 	var critters := Critters.new()
 	critters.setup(player)
@@ -150,8 +155,11 @@ func _process(delta: float) -> void:
 	_update_ghost()
 	if indoors:
 		AudioManager.set_ambient("")
-		if not _transitioning and player.position.y > ROOM_ORIGIN.y + ROOM_H - 6.0:
-			exit_house()
+		if not _transitioning and player.position.y > _room_origin().y + ROOM_H - 6.0:
+			if in_cave:
+				exit_cave()
+			else:
+				exit_house()
 	else:
 		AudioManager.set_ambient("ambient_night" if TimeSystem.is_night() else "ambient_day")
 
@@ -552,8 +560,17 @@ func harvest_at(target: Vector2) -> String:
 		EventBus.campfire_requested.emit(o)
 		return "talk"
 	if o != null and o.interaction() == "cave":
-		EventBus.message.emit("Пещера: вход заперт. Внутрь можно будет попасть в следующем обновлении.")
-		AudioManager.play("error")
+		enter_cave()
+		return "talk"
+	if o != null and o.interaction() == "chest":
+		if not cave_looted:
+			cave_looted = true
+			GameState.add_money(60)
+			GameState.add_item("salve", 1)
+			AudioManager.play("coin", 0.03)
+			EventBus.message.emit("Старый сундук: +60 монет и мазь")
+			return "happy"
+		EventBus.message.emit("Сундук пуст - всё уже забрано")
 		return "sad"
 	if o != null and o.interaction() == "house" and o.uid == "house":
 		enter_house()
@@ -682,12 +699,13 @@ func serialize() -> Dictionary:
 		crop_list.append({"x": c.x, "y": c.y, "type": crops[c]["type"], "age": crops[c]["age"], "stage": crops[c]["stage"], "watered": crops[c]["watered"]})
 	return {
 		"seed": world_seed,
+		"cave_looted": cave_looted,
 		"removed": removed_uids.keys(),
 		"soil": soil_list,
 		"crops": crop_list,
 		"built": built.values(),
 		"animals_ready": animals.map(func(a) -> bool: return a.product_ready),
-		"player": [HOUSE_DOOR_OUT.x, HOUSE_DOOR_OUT.y] if indoors else [player.position.x, player.position.y],
+		"player": [_door_out().x, _door_out().y] if indoors else [player.position.x, player.position.y],
 	}
 
 
@@ -949,6 +967,80 @@ func _build_room() -> void:
 
 
 
+
+
+func _build_cave_room() -> void:
+	var o := CAVE_ROOM_ORIGIN
+	var filler := ColorRect.new()
+	filler.color = Color("#0a080d")
+	filler.position = o + Vector2(-900, -700)
+	filler.size = Vector2(2100, 1600)
+	filler.z_index = -20
+	add_child(filler)
+	var bg := Sprite2D.new()
+	bg.texture = _make_cave_texture()
+	bg.centered = false
+	bg.position = o
+	bg.z_index = -10
+	add_child(bg)
+	var walls := StaticBody2D.new()
+	add_child(walls)
+	var rects := [
+		Rect2(o.x - 40, o.y - 40, ROOM_W + 80, 96),
+		Rect2(o.x - 40, o.y, 50, ROOM_H + 40),
+		Rect2(o.x + ROOM_W - 10, o.y, 50, ROOM_H + 40),
+		Rect2(o.x - 40, o.y + ROOM_H, 168, 40),
+		Rect2(o.x + 160, o.y + ROOM_H, ROOM_W - 160 + 40, 40),
+	]
+	for r in rects:
+		var cs := CollisionShape2D.new()
+		var sh := RectangleShape2D.new()
+		sh.size = r.size
+		cs.shape = sh
+		cs.position = r.position + r.size / 2.0
+		walls.add_child(cs)
+	# камни для добычи и старый сундук
+	var spots := [Vector2(60, 60), Vector2(104, 96), Vector2(150, 62), Vector2(196, 104), Vector2(238, 66), Vector2(84, 132)]
+	for i in range(spots.size()):
+		var kind := "rock_big" if i % 2 == 0 else "rock_small"
+		_spawn(kind, Vector2i.ZERO, "cave_rock_%d" % i, o + spots[i])
+	_spawn("chest", Vector2i.ZERO, "cave_chest", o + Vector2(144, 118))
+
+
+func _make_cave_texture() -> Texture2D:
+	var img := Image.create(ROOM_W, ROOM_H, false, Image.FORMAT_RGBA8)
+	img.fill(Color("#2a2430"))
+	var r := RandomNumberGenerator.new()
+	r.seed = 4242
+	for y in range(ROOM_H):
+		for x in range(ROOM_W):
+			if r.randf() < 0.05:
+				img.set_pixel(x, y, Color("#221d28"))
+			elif r.randf() < 0.03:
+				img.set_pixel(x, y, Color("#332c3a"))
+	# трещины
+	for i in range(14):
+		var x := r.randi_range(8, ROOM_W - 8)
+		var y := r.randi_range(8, ROOM_H - 8)
+		var dx := r.randi_range(-1, 1)
+		for k in range(r.randi_range(6, 22)):
+			x = clampi(x + dx, 2, ROOM_W - 3)
+			y = clampi(y + 1, 2, ROOM_H - 3)
+			img.set_pixel(x, y, Color("#1b1620"))
+	# светящиеся кристаллы
+	for i in range(12):
+		var x := r.randi_range(10, ROOM_W - 10)
+		var y := r.randi_range(10, ROOM_H - 10)
+		img.set_pixel(x, y, Color("#6fd6c8"))
+		img.set_pixel(x + 1, y, Color("#3f9a92"))
+	# стены-порода по краям
+	img.fill_rect(Rect2i(0, 0, ROOM_W, 26), Color("#1c1822"))
+	img.fill_rect(Rect2i(0, ROOM_H - 20, ROOM_W, 20), Color("#1c1822"))
+	for x in range(0, ROOM_W, 18):
+		var h := r.randi_range(18, 40)
+		img.fill_rect(Rect2i(x, 0, 12, h), Color("#241f2b"))
+	return ImageTexture.create_from_image(img)
+
 func _make_room_texture() -> Texture2D:
 	var img := Image.create(ROOM_W, ROOM_H, false, Image.FORMAT_RGBA8)
 	img.fill(Color("#76513d"))
@@ -968,25 +1060,23 @@ func _make_room_texture() -> Texture2D:
 	return ImageTexture.create_from_image(img)
 
 
+func _room_origin() -> Vector2:
+	return CAVE_ROOM_ORIGIN if in_cave else ROOM_ORIGIN
+
+
 func _apply_camera_limits() -> void:
 	var cam: Camera2D = player.camera
 	if indoors:
 		# Внутри дома камера приближена: комната целиком влезает в кадр.
 		cam.zoom = Vector2(2, 2)
 		var vs := get_viewport().get_visible_rect().size / cam.zoom
-		var c := ROOM_ORIGIN + Vector2(ROOM_W, ROOM_H) / 2.0
-		if ROOM_W <= vs.x:
-			cam.limit_left = int(c.x)
-			cam.limit_right = int(c.x)
-		else:
-			cam.limit_left = int(c.x - vs.x / 2.0)
-			cam.limit_right = int(c.x + vs.x / 2.0)
-		if ROOM_H <= vs.y:
-			cam.limit_top = int(c.y)
-			cam.limit_bottom = int(c.y)
-		else:
-			cam.limit_top = int(c.y - vs.y / 2.0)
-			cam.limit_bottom = int(c.y + vs.y / 2.0)
+		var c := _room_origin() + Vector2(ROOM_W, ROOM_H) / 2.0
+		# Границы ровно по кадру: маленькая комната жёстко центрируется,
+		# иначе Godot сдвигает кадр к краю вырожденных лимитов.
+		cam.limit_left = int(c.x - vs.x / 2.0)
+		cam.limit_right = int(c.x + vs.x / 2.0)
+		cam.limit_top = int(c.y - vs.y / 2.0)
+		cam.limit_bottom = int(c.y + vs.y / 2.0)
 	else:
 		cam.zoom = Vector2(1, 1)
 		cam.limit_left = 0
@@ -1027,9 +1117,54 @@ func _do_enter() -> void:
 	_apply_camera_limits()
 
 
+func _door_out() -> Vector2:
+	if in_cave:
+		return Vector2(CAVE_CELL) * TILE + Vector2(TILE, TILE) * 1.5
+	return HOUSE_DOOR_OUT
+
+
+func enter_cave() -> void:
+	if _transitioning or indoors:
+		return
+	_transition("_do_enter_cave")
+
+
+func _do_enter_cave() -> void:
+	cancel_placement()
+	indoors = true
+	in_cave = true
+	_transitioning = false
+	player.velocity = Vector2.ZERO
+	player.position = CAVE_ROOM_ORIGIN + Vector2(ROOM_W / 2.0, ROOM_H - 14.0)
+	player.facing = Vector2.UP
+	weather_fx.visible = false
+	_apply_camera_limits()
+	EventBus.message.emit("Пещера: сыро и тихо. Где-то капает вода.")
+
+
+func exit_cave() -> void:
+	if _transitioning or not indoors or not in_cave:
+		return
+	_transition("_do_exit_cave")
+
+
+func _do_exit_cave() -> void:
+	cancel_placement()
+	var out := _door_out()
+	indoors = false
+	in_cave = false
+	_transitioning = false
+	player.velocity = Vector2.ZERO
+	player.position = out
+	player.facing = Vector2.DOWN
+	weather_fx.visible = true
+	_apply_camera_limits()
+
+
 func _do_exit() -> void:
 	cancel_placement()
 	indoors = false
+	in_cave = false
 	_transitioning = false
 	player.velocity = Vector2.ZERO
 	player.position = HOUSE_DOOR_OUT
