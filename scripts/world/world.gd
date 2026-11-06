@@ -11,8 +11,8 @@ const Buildings := preload("res://scripts/world/buildings.gd")
 const Survival := preload("res://scripts/systems/survival.gd")
 const Critters := preload("res://scripts/fx/critters.gd")
 
-const MAP_W := 128
-const MAP_H := 96
+const MAP_W := 176
+const MAP_H := 132
 const TILE := 16
 const SEED := 1337
 
@@ -247,10 +247,13 @@ func _generate_terrain() -> void:
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	noise.frequency = 0.05
 	noise.fractal_octaves = 3
-	var center := Vector2(MAP_W * 0.5, MAP_H * 0.5)
+	# Остров растёт вокруг фермы, а не вокруг геометрического центра карты:
+	# за фермой на восток и юг остаётся дикая часть, края уходят под воду.
+	var center := Vector2(56, 46)
+	var span := Vector2(maxf(center.x, MAP_W - center.x), maxf(center.y, MAP_H - center.y)) * 0.9
 	for y in range(MAP_H):
 		for x in range(MAP_W):
-			var d := Vector2((x - center.x) / (MAP_W * 0.5), (y - center.y) / (MAP_H * 0.5)).length()
+			var d := Vector2((x - center.x) / span.x, (y - center.y) / span.y).length()
 			var h := noise.get_noise_2d(x, y) * 0.3 + 0.64 - pow(d, 2.2) * 0.9
 			var t := T_GRASS
 			if h < 0.12:
@@ -261,7 +264,7 @@ func _generate_terrain() -> void:
 				t = T_WATER
 			terrain[_idx(Vector2i(x, y))] = t
 	# защищённая «ядро»-площадка: дом, ферма, деревня всегда суша
-	for rect in [Rect2i(34, 27, 46, 22)]:
+	for rect in [Rect2i(34, 27, 58, 32)]:
 		for y in range(rect.position.y, rect.end.y):
 			for x in range(rect.position.x, rect.end.x):
 				var c := Vector2i(x, y)
