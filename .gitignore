@@ -16,4 +16,5 @@ export/
 
 # Скриншоты и временные скрипты разработки
 shots/
-scripts/dev/_shot.gd*.log
+scripts/dev/_shot.gd
+*.log
