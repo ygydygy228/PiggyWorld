@@ -569,10 +569,22 @@ func use_tool(tool_id: String, target: Vector2) -> String:
 	var wolf = _wolf_near(target, 20.0)
 	if wolf != null:
 		wolf.take_hit(GameState.attack_damage(tool_id), player.global_position)
-		GameState.use_weapon()
+		if tool_id == "spear":
+			GameState.use_weapon()
 		return "ok"
 	var cell := pos_to_cell(target)
 	match tool_id:
+		"salve":
+			if GameState.remove_item("salve", 1):
+				GameState.heal(30.0)
+				AudioManager.play("pickup")
+				EventBus.message.emit("+30 здоровья")
+				GameState.keep_selection("salve")
+				return "happy"
+			return "none"
+		"spear":
+			AudioManager.play("error")
+			return "none"
 		"axe", "pickaxe":
 			var o := _object_near(target, 16.0)
 			if o != null and o.is_hittable():

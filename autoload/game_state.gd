@@ -72,18 +72,39 @@ func reset() -> void:
 	EventBus.stats_changed.emit()
 
 
+## Слоты хотбара: базовые инструменты плюс созданные предметы, которые можно держать в руках.
+func slots() -> Array[String]:
+	var out: Array[String] = []
+	out.append_array(TOOLS)
+	for id in ["spear", "salve"]:
+		if count(id) > 0:
+			out.append(id)
+	return out
+
+
 func current_tool() -> String:
-	return TOOLS[selected_tool]
+	var list := slots()
+	return list[clampi(selected_tool, 0, list.size() - 1)]
 
 
 func select_tool(index: int) -> void:
-	selected_tool = clampi(index, 0, TOOLS.size() - 1)
+	var list := slots()
+	selected_tool = clampi(index, 0, list.size() - 1)
 	EventBus.tool_changed.emit(selected_tool)
 	AudioManager.play("ui_click", 0.0, 0.6)
 
 
 func cycle_tool() -> void:
-	select_tool((selected_tool + 1) % TOOLS.size())
+	var list := slots()
+	select_tool((selected_tool + 1) % list.size())
+
+
+## Индекс выбранного предмета не должен уезжать, когда список слотов меняется.
+func keep_selection(id: String) -> void:
+	var list := slots()
+	var i := list.find(id)
+	selected_tool = i if i >= 0 else clampi(selected_tool, 0, list.size() - 1)
+	EventBus.tool_changed.emit(selected_tool)
 
 
 func count(id: String) -> int:
@@ -158,8 +179,8 @@ func heal(amount: float) -> void:
 
 
 func attack_damage(tool_id: String) -> int:
-	if spear_uses > 0:
-		return 4
+	if tool_id == "spear":
+		return 4 if spear_uses > 0 else 1
 	return 2 if tool_id == "axe" else 1
 
 
@@ -217,7 +238,8 @@ func from_dict(d: Dictionary) -> void:
 	var inv: Dictionary = d.get("inventory", {})
 	for k in inv:
 		inventory[str(k)] = int(inv[k])
-	selected_tool = clampi(int(d.get("selected_tool", 0)), 0, TOOLS.size() - 1)
+	var list := slots()
+	selected_tool = clampi(int(d.get("selected_tool", 0)), 0, list.size() - 1)
 	hardcore = bool(d.get("hardcore", false))
 	health = clampf(float(d.get("health", MAX_STAT)), 0.0, MAX_STAT)
 	hunger = clampf(float(d.get("hunger", MAX_STAT)), 0.0, MAX_STAT)

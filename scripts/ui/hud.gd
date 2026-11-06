@@ -13,6 +13,9 @@ var _toast: Label
 var _toast_panel: PanelContainer
 var _slots: Array[Button] = []
 var _slot_counts: Array[Label] = []
+var _slot_ids: Array[String] = []
+var _hotbar: HBoxContainer
+const MAX_SLOTS := 9
 var _res_labels: Dictionary = {}
 var _res_rows: Dictionary = {}
 var _res_panel: PanelContainer
@@ -205,24 +208,25 @@ func _stat_row(parent: Node, key: String, icon_id: String, color: Color) -> void
 
 
 func _build_hotbar(root: Control) -> void:
-	var bar := HBoxContainer.new()
-	bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bar.offset_top = -36
-	bar.offset_bottom = -4
-	bar.offset_left = 4
-	bar.offset_right = -4
-	bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	bar.add_theme_constant_override("separation", 3)
-	root.add_child(bar)
-	for i in range(GameState.TOOLS.size()):
-		var id: String = GameState.TOOLS[i]
+	_hotbar = HBoxContainer.new()
+	_hotbar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_hotbar.offset_top = -36
+	_hotbar.offset_bottom = -4
+	_hotbar.offset_left = 4
+	_hotbar.offset_right = -4
+	_hotbar.alignment = BoxContainer.ALIGNMENT_CENTER
+	_hotbar.add_theme_constant_override("separation", 3)
+	root.add_child(_hotbar)
+	# Пул слотов: набор предметов меняется (скрафтили копьё, кончилась мазь),
+	# поэтому кнопки создаём один раз и только прячем лишние.
+	for i in range(MAX_SLOTS):
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(32, 32)
 		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		b.icon = GameState.item_icon(id)
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.visible = false
 		b.pressed.connect(GameState.select_tool.bind(i))
-		bar.add_child(b)
+		_hotbar.add_child(b)
 		var c := UiTheme.label("", UiTheme.TEXT, 9)
 		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(c)
@@ -287,13 +291,28 @@ func _refresh() -> void:
 		(_res_rows[id] as Control).visible = n > 0
 		any_res = any_res or n > 0
 	_res_panel.visible = any_res
+	var list := GameState.slots()
 	for i in range(_slots.size()):
-		var id: String = GameState.TOOLS[i]
-		_slot_counts[i].text = str(GameState.count(id)) if id.ends_with("_seed") else ""
+		var b: Button = _slots[i]
+		if i >= list.size():
+			b.visible = false
+			continue
+		var id: String = list[i]
+		b.visible = true
+		b.icon = GameState.item_icon(id)
+		b.tooltip_text = GameState.item_name(id)
+		var badge := ""
+		if id == "spear":
+			badge = str(GameState.spear_uses)
+		elif id == "salve":
+			badge = str(GameState.count("salve"))
+		elif id.ends_with("_seed"):
+			badge = str(GameState.count(id))
+		_slot_counts[i].text = badge
 		if i == GameState.selected_tool:
-			_slots[i].add_theme_stylebox_override("normal", UiTheme.box(Color("#8a6a3a"), UiTheme.GOLD, 5.0, 2))
+			b.add_theme_stylebox_override("normal", UiTheme.box(Color("#8a6a3a"), UiTheme.GOLD, 5.0, 2))
 		else:
-			_slots[i].remove_theme_stylebox_override("normal")
+			b.remove_theme_stylebox_override("normal")
 	_refresh_stats()
 
 

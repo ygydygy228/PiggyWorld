@@ -141,7 +141,8 @@ func _draw_ui() -> void:
 	var tex := GameState.item_icon(GameState.current_tool())
 	_canvas.draw_texture_rect(tex, Rect2(ac - Vector2(16, 16), Vector2(32, 32)), false)
 	var tc: Vector2 = centers["tool"]
-	var next_id: String = GameState.TOOLS[(GameState.selected_tool + 1) % GameState.TOOLS.size()]
+	var list := GameState.slots()
+	var next_id: String = list[(GameState.selected_tool + 1) % list.size()]
 	_canvas.draw_texture_rect(GameState.item_icon(next_id), Rect2(tc - Vector2(8, 8), Vector2(16, 16)), false)
 	var rc: Vector2 = centers["run"]
 	if font != null:
