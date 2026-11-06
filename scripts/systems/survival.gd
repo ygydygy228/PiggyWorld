@@ -184,7 +184,7 @@ func _spawn_wave(p: Vector2) -> void:
 func _spawn_wild() -> void:
 	for tries in range(40):
 		var size: Vector2i = world.map_size()
-		var c := Vector2i(randi_range(10, size.x - 10), randi_range(66, size.y - 8))
+		var c := Vector2i(randi_range(10, size.x - 10), randi_range(int(size.y * 0.7), size.y - 8))
 		var pos: Vector2 = world.cell_center(c)
 		if _spawn_ok(pos):
 			_add_wolf(pos, "wild")
