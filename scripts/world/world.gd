@@ -7,9 +7,11 @@ const WeatherFx := preload("res://scripts/fx/weather_fx.gd")
 const Fx := preload("res://scripts/fx/fx.gd")
 const Animal := preload("res://scripts/animals/animal.gd")
 const Npc := preload("res://scripts/world/npc.gd")
+const Buildings := preload("res://scripts/world/buildings.gd")
+const Survival := preload("res://scripts/systems/survival.gd")
 
-const MAP_W := 96
-const MAP_H := 72
+const MAP_W := 128
+const MAP_H := 96
 const TILE := 16
 const SEED := 1337
 
@@ -37,7 +39,12 @@ const ANIMAL_SPOTS := [
 	["chicken", Vector2i(43, 41)], ["chicken", Vector2i(45, 42)], ["chicken", Vector2i(42, 43)],
 	["rabbit", Vector2i(30, 36)], ["rabbit", Vector2i(31, 39)], ["cat", Vector2i(38, 40)], ["dog", Vector2i(63, 44)],
 ]
-const NPC_SPOTS := {"shopkeeper": Vector2i(69, 36), "farmer": Vector2i(61, 37), "granny": Vector2i(70, 40)}
+const NPC_HOMES := {"shopkeeper": Vector2i(65, 31), "granny": Vector2i(73, 34), "farmer": Vector2i(66, 41)}
+
+const ROOM_ORIGIN := Vector2(4096, 0)
+const ROOM_W := 288
+const ROOM_H := 176
+const HOUSE_DOOR_OUT := Vector2(648, 590)
 
 const SEASON_GROUND := [
 	{"tint": Color(1.0, 1.0, 1.0), "snow": 0.0},
@@ -62,6 +69,13 @@ var crops: Dictionary = {}
 var crop_nodes: Dictionary = {}
 var removed_uids: Dictionary = {}
 var animals: Array = []
+var built: Dictionary = {}
+var indoors: bool = false
+var survival: Survival
+var nav: AStarGrid2D
+var _transitioning: bool = false
+var placing: String = ""
+var ghost: Sprite2D
 var rng := RandomNumberGenerator.new()
 
 var tileset: TileSet
@@ -91,11 +105,18 @@ func _ready() -> void:
 	_paint_layers()
 	_place_landmarks()
 	_scatter_objects()
+	_restore_built(saved)
+	_build_nav()
 	_spawn_creatures(saved)
 	_restore_farm(saved)
+	_build_room()
 	_spawn_player(saved)
+	survival = Survival.new()
+	survival.setup(self)
+	add_child(survival)
 	EventBus.day_started.connect(_on_day_started)
 	EventBus.weather_changed.connect(_on_weather_changed)
+	EventBus.placement_cancel_requested.connect(cancel_placement)
 	_apply_season()
 	_on_weather_changed(TimeSystem.weather)
 	light.color = TimeSystem.light_color()
@@ -108,11 +129,22 @@ func _exit_tree() -> void:
 		EventBus.day_started.disconnect(_on_day_started)
 	if EventBus.weather_changed.is_connected(_on_weather_changed):
 		EventBus.weather_changed.disconnect(_on_weather_changed)
+	if EventBus.placement_cancel_requested.is_connected(cancel_placement):
+		EventBus.placement_cancel_requested.disconnect(cancel_placement)
 
 
 func _process(delta: float) -> void:
-	light.color = light.color.lerp(TimeSystem.light_color(), minf(1.0, delta * 2.0))
-	AudioManager.set_ambient("ambient_night" if TimeSystem.is_night() else "ambient_day")
+	var target := TimeSystem.light_color()
+	if indoors:
+		target = target.lerp(Color(1.0, 0.95, 0.86), 0.8)
+	light.color = light.color.lerp(target, minf(1.0, delta * 2.0))
+	_update_ghost()
+	if indoors:
+		AudioManager.set_ambient("")
+		if not _transitioning and player.position.y > ROOM_ORIGIN.y + ROOM_H - 6.0:
+			exit_house()
+	else:
+		AudioManager.set_ambient("ambient_night" if TimeSystem.is_night() else "ambient_day")
 
 
 # ---------------------------------------------------------------- построение
@@ -191,6 +223,8 @@ func cell_center(c: Vector2i) -> Vector2:
 
 
 func is_blocked(p: Vector2) -> bool:
+	if indoors:
+		return false
 	var c := pos_to_cell(p)
 	if not in_bounds(c):
 		return true
@@ -371,24 +405,41 @@ func _scatter_objects() -> void:
 			for d in [Vector2i(0, 1), Vector2i(1, 0), Vector2i(0, -1), Vector2i(-1, 0), Vector2i(1, 1), Vector2i(-1, -1)]:
 				if get_t(c + d) != T_GRASS:
 					near_water = true
+			var region := region_at(c)
 			var f := forest.get_noise_2d(x, y)
 			var tree_p := 0.38 if f > 0.14 else 0.025
+			var rock_p := 0.014
+			var bush_p := 0.02
+			var flower_p := 0.07
+			if region == "dark":
+				tree_p = 0.34 if f > -0.05 else 0.12
+				rock_p = 0.012
+				bush_p = 0.035
+				flower_p = 0.03
+			elif region == "rocky":
+				tree_p = 0.02
+				rock_p = 0.08
+				bush_p = 0.012
+				flower_p = 0.01
 			if r < tree_p and not near_water:
 				var kind := "tree_oak"
 				var k := rng.randf()
-				if x < 34 or y < 24:
+				if region == "dark":
+					kind = "tree_pine" if k < 0.65 else "tree_oak_big"
+				elif x < 34 or y < 24:
 					kind = "tree_pine" if k < 0.7 else "tree_oak"
 				elif k < 0.35:
 					kind = "tree_oak_big"
 				_spawn(kind, c)
 				_occupy(c, 1)
-			elif r < tree_p + 0.014:
-				_spawn("rock_big" if (y < 26 and rng.randf() < 0.5) else "rock_small", c)
+			elif r < tree_p + rock_p:
+				var big := region == "rocky" or y < 26
+				_spawn("rock_big" if (big and rng.randf() < 0.5) else "rock_small", c)
 				_occupy(c, 1)
-			elif r < tree_p + 0.014 + 0.02 and not near_water:
+			elif r < tree_p + rock_p + bush_p and not near_water:
 				_spawn("bush_berries" if rng.randf() < 0.6 else "bush", c)
 				_occupy(c, 1)
-			elif r < tree_p + 0.014 + 0.02 + 0.07:
+			elif r < tree_p + rock_p + bush_p + flower_p:
 				_spawn(flower_kinds[rng.randi() % flower_kinds.size()], c)
 				occupied[c] = true
 
@@ -485,14 +536,32 @@ func harvest_at(target: Vector2) -> String:
 		var r: String = o.harvest()
 		if r != "":
 			return r
+	if o != null and o.interaction() == "campfire" and not (GameState.current_tool() == "axe" and o.fuel <= 0.0):
+		EventBus.campfire_requested.emit(o)
+		return "talk"
 	if o != null and o.interaction() == "cave":
 		EventBus.message.emit("Пещера: вход заперт. Внутрь можно будет попасть в следующем обновлении.")
 		AudioManager.play("error")
+		return "sad"
+	if o != null and o.interaction() == "house" and o.uid == "house":
+		enter_house()
+		return "talk"
+	if o != null and o.interaction() == "bed":
+		var hour := TimeSystem.hour()
+		if hour >= 18 or hour < 5:
+			EventBus.dialog_requested.emit("Кровать", ["Свинка зевает. Одеяло выглядит очень уютно..."], "sleep")
+			return "talk"
+		EventBus.message.emit("Спать пока не хочется (после 18:00)")
 		return "sad"
 	return "none"
 
 
 func use_tool(tool_id: String, target: Vector2) -> String:
+	var wolf = _wolf_near(target, 20.0)
+	if wolf != null:
+		wolf.take_hit(GameState.attack_damage(tool_id), player.global_position)
+		GameState.use_weapon()
+		return "ok"
 	var cell := pos_to_cell(target)
 	match tool_id:
 		"axe", "pickaxe":
@@ -531,11 +600,13 @@ func use_tool(tool_id: String, target: Vector2) -> String:
 
 func _on_day_started(_day: int) -> void:
 	var raining := TimeSystem.weather == "rain"
+	GameState.decay_food()
+	var winter_stop := GameState.hardcore and TimeSystem.season_index() == 3
 	for c in crops:
 		var cr: Dictionary = crops[c]
 		if raining:
 			cr["watered"] = true
-		if cr["watered"]:
+		if cr["watered"] and not winter_stop:
 			cr["age"] = int(cr["age"]) + 1
 			var per: int = CROPS[cr["type"]]["per"]
 			cr["stage"] = mini(3, int(floor(float(cr["age"]) / per)))
@@ -568,10 +639,17 @@ func _apply_season() -> void:
 
 
 func _on_object_destroyed(obj) -> void:
-	removed_uids[obj.uid] = true
+	_mark_object(obj, false)
+	if str(obj.uid).begins_with("built:"):
+		built.erase(obj.uid)
+	else:
+		removed_uids[obj.uid] = true
 
 
 func serialize() -> Dictionary:
+	for n in get_tree().get_nodes_in_group("campfires"):
+		if built.has(n.uid):
+			built[n.uid]["fuel"] = n.fuel
 	var soil_list: Array = []
 	for c in soil:
 		soil_list.append({"x": c.x, "y": c.y, "wet": soil[c]})
@@ -582,8 +660,9 @@ func serialize() -> Dictionary:
 		"removed": removed_uids.keys(),
 		"soil": soil_list,
 		"crops": crop_list,
+		"built": built.values(),
 		"animals_ready": animals.map(func(a) -> bool: return a.product_ready),
-		"player": [player.position.x, player.position.y],
+		"player": [HOUSE_DOOR_OUT.x, HOUSE_DOOR_OUT.y] if indoors else [player.position.x, player.position.y],
 	}
 
 
@@ -598,9 +677,10 @@ func _spawn_creatures(saved: Dictionary) -> void:
 	var ready_list: Array = saved.get("animals_ready", [])
 	for i in range(mini(ready_list.size(), animals.size())):
 		animals[i].product_ready = bool(ready_list[i])
-	for npc_id in NPC_SPOTS:
+	for npc_id in NPC_HOMES:
+		var hc: Vector2i = NPC_HOMES[npc_id]
 		var n := Npc.new()
-		n.setup(str(npc_id), cell_center(NPC_SPOTS[npc_id]))
+		n.setup(str(npc_id), self, Vector2(hc.x * TILE + 8, (hc.y + 1) * TILE + 12))
 		objects_node.add_child(n)
 
 
@@ -609,6 +689,8 @@ func _creature_near(p: Vector2, radius: float):
 	var best_d := radius
 	for group in ["animals", "npcs"]:
 		for n in get_tree().get_nodes_in_group(group):
+			if n is CanvasItem and not (n as CanvasItem).visible:
+				continue
 			var d: float = (n as Node2D).global_position.distance_to(p)
 			if d < best_d:
 				best_d = d
@@ -632,3 +714,329 @@ func _plant(tool_id: String, cell: Vector2i) -> String:
 	_update_crop_node(cell)
 	AudioManager.play("plant")
 	return "ok"
+
+
+# ---------------------------------------------------------------- стройка
+
+func _feet(cell: Vector2i) -> Vector2:
+	return Vector2(cell.x * TILE + TILE / 2.0, cell.y * TILE + TILE - 1)
+
+
+func _front_cell() -> Vector2i:
+	return pos_to_cell(player.global_position + player.facing * 16.0 + Vector2(0, -4))
+
+
+func _can_place(cell: Vector2i) -> bool:
+	var c := cell_center(cell)
+	if indoors:
+		if not room_floor_rect().has_point(c):
+			return false
+	else:
+		if not in_bounds(cell) or get_t(cell) != T_GRASS:
+			return false
+		if soil.has(cell) or crops.has(cell) or bridge_cells.has(cell):
+			return false
+	if _object_near(c, 13.0) != null or _creature_near(c, 12.0) != null:
+		return false
+	return player.global_position.distance_to(c) >= 7.0
+
+
+func start_placement(kind: String) -> void:
+	if not Buildings.DEFS.has(kind):
+		return
+	if not Buildings.allowed(kind, indoors):
+		EventBus.message.emit("Здесь это не построить")
+		return
+	cancel_placement()
+	placing = kind
+	ghost = Sprite2D.new()
+	ghost.centered = false
+	ghost.z_index = 5
+	var tex: Texture2D = load("res://assets/objects/%s.png" % Buildings.DEFS[kind]["tex"])
+	ghost.hframes = int(Buildings.DEFS[kind].get("frames", 1))
+	ghost.texture = tex
+	ghost.offset = Vector2(-(tex.get_width() / float(ghost.hframes)) / 2.0, -tex.get_height() + 2.0)
+	ground_node.add_child(ghost)
+	EventBus.placement_changed.emit(true, kind)
+	EventBus.message.emit("Выбери место и нажми действие")
+
+
+func cancel_placement() -> void:
+	if ghost != null:
+		ghost.queue_free()
+		ghost = null
+	if placing != "":
+		placing = ""
+		EventBus.placement_changed.emit(false, "")
+
+
+func _update_ghost() -> void:
+	if ghost == null or player == null:
+		return
+	var cell := _front_cell()
+	ghost.position = _feet(cell)
+	ghost.modulate = Color(0.65, 1.0, 0.65, 0.8) if _can_place(cell) else Color(1.0, 0.5, 0.5, 0.7)
+
+
+## Поставить выбранную постройку перед свинкой. Возвращает реакцию свинки.
+func place_current() -> String:
+	if placing == "":
+		return ""
+	var cell := _front_cell()
+	var def: Dictionary = Buildings.DEFS[placing]
+	if not _can_place(cell):
+		EventBus.message.emit("Сюда ставить нельзя")
+		AudioManager.play("error")
+		return "sad"
+	if not Buildings.can_afford(placing):
+		EventBus.message.emit("Не хватает ресурсов")
+		AudioManager.play("error")
+		return "sad"
+	Buildings.pay(placing)
+	var uid := "built:%s@%d,%d" % [placing, cell.x, cell.y]
+	removed_uids.erase(uid)
+	var placed := _spawn(placing, cell, uid)
+	if placed != null:
+		built[uid] = {"kind": placing, "x": cell.x, "y": cell.y}
+		_mark_object(placed, true)
+	AudioManager.play("build")
+	Fx.burst(objects_node, _feet(cell) + Vector2(0, -8), Color("#c79566"), 12, 50.0)
+	EventBus.message.emit("Построено: %s" % str(def["name"]))
+	if not Buildings.can_afford(placing):
+		cancel_placement()
+	return "happy"
+
+
+func _restore_built(saved: Dictionary) -> void:
+	for b in saved.get("built", []):
+		var kind := str(b.get("kind", ""))
+		if not Buildings.DEFS.has(kind):
+			continue
+		var cell := Vector2i(int(b["x"]), int(b["y"]))
+		var uid := "built:%s@%d,%d" % [kind, cell.x, cell.y]
+		var restored := _spawn(kind, cell, uid)
+		if restored != null:
+			built[uid] = {"kind": kind, "x": cell.x, "y": cell.y}
+			if b.has("fuel"):
+				restored.fuel = float(b["fuel"])
+				built[uid]["fuel"] = restored.fuel
+
+
+# ---------------------------------------------------------------- навигация жителей
+
+func _build_nav() -> void:
+	nav = AStarGrid2D.new()
+	nav.region = Rect2i(0, 0, MAP_W, MAP_H)
+	nav.cell_size = Vector2(TILE, TILE)
+	nav.offset = Vector2(TILE / 2.0, TILE / 2.0)
+	nav.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	nav.update()
+	for y in range(MAP_H):
+		for x in range(MAP_W):
+			var c := Vector2i(x, y)
+			if get_t(c) == T_WATER and not bridge_cells.has(c):
+				nav.set_point_solid(c, true)
+	for n in objects_node.get_children():
+		if n is WorldObject:
+			_mark_object(n, true)
+
+
+func _mark_object(o, solid: bool) -> void:
+	if nav == null:
+		return
+	var col: Vector2 = WorldObject.DEFS[o.kind].get("col", Vector2.ZERO)
+	if col == Vector2.ZERO:
+		return
+	var a := pos_to_cell(o.position + Vector2(-col.x / 2.0, -col.y))
+	var b := pos_to_cell(o.position + Vector2(col.x / 2.0 - 0.01, -0.01))
+	for y in range(a.y, b.y + 1):
+		for x in range(a.x, b.x + 1):
+			var c := Vector2i(x, y)
+			if in_bounds(c):
+				nav.set_point_solid(c, solid)
+
+
+func find_path(from: Vector2, to: Vector2) -> PackedVector2Array:
+	if nav == null:
+		return PackedVector2Array()
+	var a := pos_to_cell(from)
+	var b := pos_to_cell(to)
+	if not in_bounds(a) or not in_bounds(b) or nav.is_point_solid(b):
+		return PackedVector2Array()
+	var was := nav.is_point_solid(a)
+	nav.set_point_solid(a, false)
+	var p := nav.get_point_path(a, b)
+	nav.set_point_solid(a, was)
+	return p
+
+
+func random_walkable_near(center: Vector2, radius_cells: int) -> Vector2:
+	if nav == null:
+		return Vector2.ZERO
+	var base := pos_to_cell(center)
+	for i in range(10):
+		var c := base + Vector2i(randi_range(-radius_cells, radius_cells), randi_range(-radius_cells, radius_cells))
+		if in_bounds(c) and not nav.is_point_solid(c) and get_t(c) >= T_GRASS:
+			return cell_center(c)
+	return Vector2.ZERO
+
+
+# ---------------------------------------------------------------- интерьер дома
+
+func room_floor_rect() -> Rect2:
+	return Rect2(ROOM_ORIGIN.x + 14, ROOM_ORIGIN.y + 62, ROOM_W - 28, ROOM_H - 64)
+
+
+func _build_room() -> void:
+	var o := ROOM_ORIGIN
+	var filler := ColorRect.new()
+	filler.color = Color("#150f1a")
+	filler.position = o + Vector2(-900, -700)
+	filler.size = Vector2(2100, 1600)
+	filler.z_index = -20
+	add_child(filler)
+	var bg := Sprite2D.new()
+	bg.texture = load("res://assets/interior/room.png")
+	bg.centered = false
+	bg.position = o
+	bg.z_index = -10
+	add_child(bg)
+	var walls := StaticBody2D.new()
+	add_child(walls)
+	var rects := [
+		Rect2(o.x - 40, o.y - 40, ROOM_W + 80, 96),
+		Rect2(o.x - 40, o.y, 50, ROOM_H + 40),
+		Rect2(o.x + ROOM_W - 10, o.y, 50, ROOM_H + 40),
+		Rect2(o.x - 40, o.y + ROOM_H, 168, 40),
+		Rect2(o.x + 160, o.y + ROOM_H, ROOM_W - 160 + 40, 40),
+	]
+	for r in rects:
+		var cs := CollisionShape2D.new()
+		var sh := RectangleShape2D.new()
+		sh.size = r.size
+		cs.shape = sh
+		cs.position = r.position + r.size / 2.0
+		walls.add_child(cs)
+	_spawn("bed", Vector2i.ZERO, "room_bed", o + Vector2(52, 92))
+	_spawn("room_table", Vector2i.ZERO, "room_table", o + Vector2(226, 86))
+	_spawn("room_shelf", Vector2i.ZERO, "room_shelf", o + Vector2(124, 58))
+	_spawn("clock", Vector2i.ZERO, "room_clock", o + Vector2(176, 38))
+
+
+func _apply_camera_limits() -> void:
+	var cam: Camera2D = player.camera
+	if indoors:
+		var vs := get_viewport().get_visible_rect().size
+		var c := ROOM_ORIGIN + Vector2(ROOM_W, ROOM_H) / 2.0
+		cam.limit_left = int(c.x - vs.x / 2.0)
+		cam.limit_right = int(c.x + vs.x / 2.0)
+		cam.limit_top = int(c.y - vs.y / 2.0)
+		cam.limit_bottom = int(c.y + vs.y / 2.0)
+	else:
+		cam.limit_left = 0
+		cam.limit_top = 0
+		cam.limit_right = MAP_W * TILE
+		cam.limit_bottom = MAP_H * TILE
+	cam.reset_smoothing()
+
+
+func _transition(method: String) -> void:
+	_transitioning = true
+	if EventBus.fade_requested.get_connections().is_empty():
+		call(method)
+	else:
+		EventBus.fade_requested.emit(Callable(self, method))
+
+
+func enter_house() -> void:
+	if _transitioning or indoors:
+		return
+	_transition("_do_enter")
+
+
+func exit_house() -> void:
+	if _transitioning or not indoors:
+		return
+	_transition("_do_exit")
+
+
+func _do_enter() -> void:
+	cancel_placement()
+	indoors = true
+	_transitioning = false
+	player.velocity = Vector2.ZERO
+	player.position = ROOM_ORIGIN + Vector2(ROOM_W / 2.0, ROOM_H - 14.0)
+	player.facing = Vector2.UP
+	weather_fx.visible = false
+	_apply_camera_limits()
+
+
+func _do_exit() -> void:
+	cancel_placement()
+	indoors = false
+	_transitioning = false
+	player.velocity = Vector2.ZERO
+	player.position = HOUSE_DOOR_OUT
+	player.facing = Vector2.DOWN
+	weather_fx.visible = true
+	_apply_camera_limits()
+
+
+# ---------------------------------------------------------------- выживание
+
+func region_at(c: Vector2i) -> String:
+	if c.y >= 66:
+		return "dark"
+	if c.x >= 88 and c.y < 62:
+		return "rocky"
+	return "home"
+
+
+## Деревня считается безопасной: волки туда не заходят.
+func is_safe(p: Vector2) -> bool:
+	var r := Rect2(VILLAGE_RECT.position.x * TILE - 48.0, VILLAGE_RECT.position.y * TILE - 48.0, VILLAGE_RECT.size.x * TILE + 96.0, VILLAGE_RECT.size.y * TILE + 96.0)
+	return r.has_point(p)
+
+
+func is_lit(p: Vector2) -> bool:
+	if is_safe(p):
+		return true
+	for n in get_tree().get_nodes_in_group("lights"):
+		if (n as Node2D).global_position.distance_to(p) < float(n.light_radius) and n.lit_now():
+			return true
+	return false
+
+
+func is_near_fire(p: Vector2) -> bool:
+	for n in get_tree().get_nodes_in_group("fires"):
+		if n.lit_now() and (n as Node2D).global_position.distance_to(p) < float(n.light_radius):
+			return true
+	return false
+
+
+func _wolf_near(p: Vector2, radius: float):
+	var best = null
+	var best_d := radius
+	for w in get_tree().get_nodes_in_group("wolves"):
+		var d: float = (w as Node2D).global_position.distance_to(p)
+		if d < best_d:
+			best_d = d
+			best = w
+	return best
+
+
+## Возрождение: свинка просыпается в доме у кровати.
+func respawn_at_home() -> void:
+	cancel_placement()
+	if not indoors:
+		_do_enter()
+	player.position = ROOM_ORIGIN + Vector2(52, 104)
+	player.facing = Vector2.DOWN
+
+
+func is_grass(c: Vector2i) -> bool:
+	return get_t(c) == T_GRASS
+
+
+func map_size() -> Vector2i:
+	return Vector2i(MAP_W, MAP_H)

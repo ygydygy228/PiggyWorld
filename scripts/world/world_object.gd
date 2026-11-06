@@ -17,10 +17,22 @@ const DEFS := {
 	"flower_yellow": {"tex": "flower_yellow", "harvest": true, "ground": true, "season": true},
 	"flower_blue": {"tex": "flower_blue", "harvest": true, "ground": true, "season": true},
 	"flower_white": {"tex": "flower_white", "harvest": true, "ground": true, "season": true},
-	"house": {"tex": "house", "col": Vector2(46, 20)},
+	"house": {"tex": "house", "col": Vector2(46, 20), "interact": "house"},
 	"fence": {"tex": "fence", "col": Vector2(14, 6)},
 	"cave": {"tex": "cave", "col": Vector2(44, 14), "interact": "cave"},
 	"bridge": {"tex": "bridge", "ground": true},
+	"bed": {"tex": "bed", "col": Vector2(38, 16), "interact": "bed"},
+	"room_table": {"tex": "table", "col": Vector2(28, 10)},
+	"room_shelf": {"tex": "bookshelf", "col": Vector2(26, 8)},
+	"clock": {"tex": "clock", "ground": true},
+	"armchair": {"tex": "armchair", "hp": 2, "tool": "axe", "drop": "wood", "n": 2, "col": Vector2(18, 8), "fx": Color("#c8453a")},
+	"bookshelf": {"tex": "bookshelf", "hp": 2, "tool": "axe", "drop": "wood", "n": 3, "col": Vector2(26, 8), "fx": Color("#a9754a")},
+	"plant_pot": {"tex": "plant_pot", "hp": 1, "tool": "axe", "drop": "flower", "n": 2, "col": Vector2(8, 6), "fx": Color("#4f9e4a")},
+	"fence_built": {"tex": "fence", "hp": 2, "tool": "axe", "drop": "wood", "n": 1, "col": Vector2(14, 6), "fx": Color("#c79566")},
+	"bench": {"tex": "bench", "hp": 2, "tool": "axe", "drop": "wood", "n": 2, "col": Vector2(28, 8), "fx": Color("#c79566")},
+	"lamp": {"tex": "lamp", "hp": 2, "tool": "axe", "drop": "wood", "n": 1, "col": Vector2(6, 5), "fx": Color("#5b6272"), "light": true, "radius": 56.0},
+	"campfire": {"tex": "campfire", "frames": 4, "hp": 2, "tool": "axe", "drop": "wood", "n": 1, "col": Vector2(10, 6), "fx": Color("#e8803a"), "light": true, "fire": true, "radius": 72.0, "interact": "campfire"},
+	"scarecrow": {"tex": "scarecrow", "hp": 2, "tool": "axe", "drop": "wood", "n": 2, "col": Vector2(8, 5), "fx": Color("#e8c868")},
 }
 
 var kind: String = ""
@@ -29,6 +41,9 @@ var cell: Vector2i = Vector2i.ZERO
 var hp: int = 0
 var sprite: Sprite2D
 var body: StaticBody2D
+var light: PointLight2D
+var fuel: float = 0.0
+var light_radius: float = 0.0
 
 
 func setup(p_kind: String, p_cell: Vector2i, mat: Material) -> void:
@@ -38,6 +53,7 @@ func setup(p_kind: String, p_cell: Vector2i, mat: Material) -> void:
 	hp = int(d.get("hp", 0))
 	sprite = Sprite2D.new()
 	sprite.centered = false
+	sprite.hframes = int(d.get("frames", 1))
 	_set_texture(str(d["tex"]))
 	if d.get("season", false) and mat != null:
 		sprite.material = mat
@@ -54,6 +70,63 @@ func setup(p_kind: String, p_cell: Vector2i, mat: Material) -> void:
 		add_child(body)
 	if d.get("harvest", false):
 		add_to_group("harvestable")
+	light_radius = float(d.get("radius", 0.0))
+	if d.get("light", false):
+		_make_light()
+		add_to_group("lights")
+	if d.get("fire", false):
+		fuel = 240.0
+		add_to_group("fires")
+		add_to_group("campfires")
+		light.color = Color(1.0, 0.7, 0.35)
+		light.texture_scale = 2.2
+		light.position = Vector2(0, -10)
+	set_process(light != null)
+
+
+func _make_light() -> void:
+	light = PointLight2D.new()
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1, 1, 1, 1))
+	grad.set_color(1, Color(1, 1, 1, 0))
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 128
+	tex.height = 128
+	light.texture = tex
+	light.color = Color(1.0, 0.85, 0.55)
+	light.energy = 0.0
+	light.texture_scale = 1.5
+	light.position = Vector2(0, -30)
+	add_child(light)
+
+
+func lit_now() -> bool:
+	if kind == "campfire":
+		return fuel > 0.0
+	return kind == "lamp"
+
+
+func add_fuel(seconds: float) -> void:
+	fuel = minf(fuel + seconds, 600.0)
+
+
+func _process(delta: float) -> void:
+	if light == null:
+		return
+	if kind == "campfire":
+		fuel = maxf(0.0, fuel - delta)
+		var on := fuel > 0.0
+		var t_ms := float(Time.get_ticks_msec())
+		sprite.frame = (int(t_ms / 130.0) % 3) if on else 3
+		var target := (1.3 + 0.15 * sin(t_ms / 90.0)) if on else 0.0
+		light.energy = lerpf(light.energy, target, minf(1.0, delta * 6.0))
+	else:
+		var dark := 1.0 - clampf(TimeSystem.light_color().get_luminance(), 0.0, 1.0)
+		light.energy = lerpf(light.energy, dark * 1.6, minf(1.0, delta * 3.0))
 
 
 func _set_texture(tex_name: String) -> void:
@@ -62,7 +135,7 @@ func _set_texture(tex_name: String) -> void:
 	if kind == "bridge":
 		sprite.offset = Vector2(-8, -15)
 	else:
-		sprite.offset = Vector2(-tex.get_width() / 2.0, -tex.get_height() + 2.0)
+		sprite.offset = Vector2(-(tex.get_width() / float(sprite.hframes)) / 2.0, -tex.get_height() + 2.0)
 
 
 func interaction() -> String:

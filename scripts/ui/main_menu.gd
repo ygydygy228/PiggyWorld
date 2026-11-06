@@ -1,7 +1,7 @@
 extends Control
 ## Главное меню: трава, деревья, танцующая свинка и кнопки.
 
-signal start_requested(continue_game: bool)
+signal start_requested(continue_game: bool, hardcore: bool)
 
 const PigMeta := preload("res://scripts/art/pig_meta.gd")
 const PigFrames := preload("res://scripts/art/pig_frames.gd")
@@ -42,9 +42,10 @@ func _ready() -> void:
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 8)
 	_menu_box.add_child(spacer)
-	var cont := _button("Продолжить", func() -> void: start_requested.emit(true))
+	var cont := _button("Продолжить", func() -> void: start_requested.emit(true, false))
 	cont.disabled = not SaveSystem.has_save()
-	_button("Новая игра", func() -> void: start_requested.emit(false))
+	_button("Новая игра (уютная)", func() -> void: start_requested.emit(false, false))
+	_button("Хардкор: выживание", func() -> void: start_requested.emit(false, true))
 	_button("Настройки", _open_settings)
 	_menu_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT, Control.PRESET_MODE_MINSIZE, 36)
 

@@ -23,6 +23,7 @@ var _step_timer: float = 0.0
 var _oink_timer: float = 10.0
 var _pending_t: float = 0.0
 var _pending_target: Vector2 = Vector2.ZERO
+var _kb: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -44,6 +45,7 @@ func _ready() -> void:
 	add_child(camera)
 	camera.make_current()
 	sprite.play("idle_down")
+	EventBus.player_hurt.connect(_on_hurt)
 
 
 func _draw() -> void:
@@ -91,6 +93,8 @@ func _physics_process(delta: float) -> void:
 		if _oink_timer <= 0.0:
 			_oink_timer = randf_range(10.0, 22.0)
 			AudioManager.play("oink", 0.1, 0.7)
+	velocity += _kb
+	_kb = _kb.move_toward(Vector2.ZERO, 480.0 * delta)
 	_block_water()
 	move_and_slide()
 	_update_anim(moving, running)
@@ -167,6 +171,11 @@ func react(kind: String) -> void:
 func do_action() -> void:
 	if lock_time > 0.0 or world == null or not input_enabled:
 		return
+	if world.placing != "":
+		var pr: String = world.place_current()
+		if pr != "":
+			react(pr)
+		return
 	var target := global_position + facing * 14.0 + Vector2(0, -3)
 	var r: String = world.harvest_at(target)
 	if r != "none":
@@ -185,3 +194,12 @@ func _finish_tool_use() -> void:
 		react("sad")
 	elif r == "none":
 		EventBus.message.emit("Здесь нечего делать")
+
+
+func knockback_from(pos: Vector2) -> void:
+	_kb = (global_position - pos).normalized() * 130.0
+
+
+func _on_hurt() -> void:
+	sprite.modulate = Color(1.0, 0.35, 0.35)
+	create_tween().tween_property(sprite, "modulate", Color.WHITE, 0.3)

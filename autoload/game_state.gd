@@ -1,9 +1,9 @@
 extends Node
-## Деньги, инвентарь, выбранный инструмент. Данные предметов описаны таблицей ITEMS.
+## Деньги, инвентарь, выбранный инструмент, показатели выживания. Данные предметов — таблица ITEMS.
 
 const TOOLS: Array[String] = ["axe", "pickaxe", "hoe", "can", "carrot_seed", "turnip_seed", "pumpkin_seed"]
 
-## sell — цена продажи; buy — цена покупки в лавке (0 = не продаётся/не покупается).
+## sell — цена продажи; buy — цена покупки; food — эффект еды; perish — доля свежести, теряемая за день (хардкор).
 const ITEMS := {
 	"axe": {"name": "Топор", "icon": "axe"},
 	"pickaxe": {"name": "Кирка", "icon": "pickaxe"},
@@ -14,23 +14,39 @@ const ITEMS := {
 	"pumpkin_seed": {"name": "Семена тыквы", "icon": "seeds_pumpkin", "buy": 20, "sell": 10},
 	"wood": {"name": "Дерево", "icon": "wood", "sell": 3},
 	"stone": {"name": "Камень", "icon": "stone", "sell": 4},
-	"berries": {"name": "Ягоды", "icon": "berries", "sell": 5},
-	"flower": {"name": "Цветок", "icon": "flower", "sell": 2},
-	"carrot": {"name": "Морковь", "icon": "carrot", "sell": 12},
-	"turnip": {"name": "Репа", "icon": "turnip", "sell": 18},
-	"pumpkin": {"name": "Тыква", "icon": "pumpkin", "sell": 45},
-	"egg": {"name": "Яйцо", "icon": "egg", "sell": 10},
-	"milk": {"name": "Молоко", "icon": "milk", "sell": 18},
+	"berries": {"name": "Ягоды", "icon": "berries", "sell": 5, "food": {"hunger": 9, "health": 0, "sanity": 0}, "perish": 0.3},
+	"flower": {"name": "Цветок", "icon": "flower", "sell": 2, "food": {"hunger": 1, "health": 0, "sanity": 10}, "perish": 0.25},
+	"carrot": {"name": "Морковь", "icon": "carrot", "sell": 12, "food": {"hunger": 13, "health": 1, "sanity": 0}, "perish": 0.12},
+	"turnip": {"name": "Репа", "icon": "turnip", "sell": 18, "food": {"hunger": 13, "health": 1, "sanity": 0}, "perish": 0.1},
+	"pumpkin": {"name": "Тыква", "icon": "pumpkin", "sell": 45, "food": {"hunger": 28, "health": 2, "sanity": 0}, "perish": 0.07},
+	"egg": {"name": "Яйцо", "icon": "egg", "sell": 10, "food": {"hunger": 6, "health": 0, "sanity": -2}, "perish": 0.2},
+	"milk": {"name": "Молоко", "icon": "milk", "sell": 18, "food": {"hunger": 11, "health": 2, "sanity": 3}, "perish": 0.35},
 	"wool": {"name": "Шерсть", "icon": "wool", "sell": 15},
+	"meat": {"name": "Мясо", "icon": "meat", "sell": 8, "food": {"hunger": 12, "health": 0, "sanity": -6}, "perish": 0.45},
+	"cooked_meat": {"name": "Жареное мясо", "icon": "cooked_meat", "sell": 16, "food": {"hunger": 32, "health": 4, "sanity": 3}, "perish": 0.2},
+	"fried_egg": {"name": "Яичница", "icon": "fried_egg", "sell": 16, "food": {"hunger": 22, "health": 2, "sanity": 4}, "perish": 0.25},
+	"roasted_carrot": {"name": "Печёная морковь", "icon": "roasted_carrot", "sell": 18, "food": {"hunger": 24, "health": 2, "sanity": 3}, "perish": 0.18},
+	"roasted_turnip": {"name": "Печёная репа", "icon": "roasted_turnip", "sell": 24, "food": {"hunger": 24, "health": 2, "sanity": 3}, "perish": 0.16},
+	"rot": {"name": "Гниль", "icon": "rot", "sell": 1},
+	"salve": {"name": "Лечебная мазь", "icon": "salve", "sell": 25, "heal": 30},
+	"spear": {"name": "Копьё", "icon": "spear"},
 }
 
 const SHOP_STOCK: Array[String] = ["carrot_seed", "turnip_seed", "pumpkin_seed"]
 
 const START_MONEY := 50
+const MAX_STAT := 100.0
 
 var money: int = START_MONEY
 var inventory: Dictionary = {}
 var selected_tool: int = 0
+var hardcore: bool = false
+var health: float = MAX_STAT
+var hunger: float = MAX_STAT
+var sanity: float = MAX_STAT
+var has_vest: bool = false
+var spear_uses: int = 0
+var fresh: Dictionary = {}
 var _icon_cache: Dictionary = {}
 
 
@@ -43,9 +59,17 @@ func reset() -> void:
 	money = START_MONEY
 	inventory = {"carrot_seed": 8, "turnip_seed": 4, "pumpkin_seed": 2}
 	selected_tool = 0
+	hardcore = false
+	health = MAX_STAT
+	hunger = MAX_STAT
+	sanity = MAX_STAT
+	has_vest = false
+	spear_uses = 0
+	fresh = {}
 	EventBus.money_changed.emit(money)
 	EventBus.inventory_changed.emit()
 	EventBus.tool_changed.emit(selected_tool)
+	EventBus.stats_changed.emit()
 
 
 func current_tool() -> String:
@@ -66,8 +90,15 @@ func count(id: String) -> int:
 	return int(inventory.get(id, 0))
 
 
+func is_perishable(id: String) -> bool:
+	return ITEMS.get(id, {}).has("perish")
+
+
 func add_item(id: String, amount: int = 1) -> void:
-	inventory[id] = count(id) + amount
+	var old := count(id)
+	inventory[id] = old + amount
+	if is_perishable(id):
+		fresh[id] = (float(fresh.get(id, 1.0)) * old + 1.0 * amount) / float(old + amount)
 	EventBus.inventory_changed.emit()
 	EventBus.item_collected.emit(id, amount)
 
@@ -76,12 +107,72 @@ func remove_item(id: String, amount: int = 1) -> bool:
 	if count(id) < amount:
 		return false
 	inventory[id] = count(id) - amount
+	if inventory[id] <= 0:
+		fresh.erase(id)
 	EventBus.inventory_changed.emit()
 	return true
 
 
+func freshness(id: String) -> float:
+	return float(fresh.get(id, 1.0))
+
+
+## Раз в день (хардкор): еда теряет свежесть, совсем несвежая превращается в гниль.
+func decay_food() -> void:
+	if not hardcore:
+		return
+	for id in inventory.keys():
+		var n := count(str(id))
+		if n <= 0 or not is_perishable(str(id)):
+			continue
+		var f := freshness(str(id)) - float(ITEMS[id]["perish"])
+		if f <= 0.0:
+			inventory[id] = 0
+			fresh.erase(id)
+			add_item("rot", n)
+			EventBus.message.emit("Испортилось: %s" % item_name(str(id)))
+		else:
+			fresh[id] = f
+	EventBus.inventory_changed.emit()
+
+
+## Съесть предмет. Несвежая еда (<50%) даёт вдвое меньше.
+func eat(id: String) -> bool:
+	var food: Dictionary = ITEMS.get(id, {}).get("food", {})
+	if food.is_empty() or count(id) <= 0:
+		return false
+	var mult := 1.0
+	if is_perishable(id) and freshness(id) <= 0.5:
+		mult = 0.5
+	remove_item(id, 1)
+	hunger = clampf(hunger + float(food.get("hunger", 0)) * mult, 0.0, MAX_STAT)
+	health = clampf(health + float(food.get("health", 0)) * mult, 0.0, MAX_STAT)
+	sanity = clampf(sanity + float(food.get("sanity", 0)), 0.0, MAX_STAT)
+	EventBus.stats_changed.emit()
+	return true
+
+
+func heal(amount: float) -> void:
+	health = clampf(health + amount, 0.0, MAX_STAT)
+	EventBus.stats_changed.emit()
+
+
+func attack_damage(tool_id: String) -> int:
+	if spear_uses > 0:
+		return 4
+	return 2 if tool_id == "axe" else 1
+
+
+func use_weapon() -> void:
+	if spear_uses > 0:
+		spear_uses -= 1
+		if spear_uses == 0:
+			remove_item("spear", count("spear"))
+			EventBus.message.emit("Копьё сломалось!")
+
+
 func add_money(amount: int) -> void:
-	money += amount
+	money = maxi(0, money + amount)
 	EventBus.money_changed.emit(money)
 
 
@@ -113,7 +204,11 @@ func item_icon(id: String) -> Texture2D:
 
 
 func to_dict() -> Dictionary:
-	return {"money": money, "inventory": inventory, "selected_tool": selected_tool}
+	return {
+		"money": money, "inventory": inventory, "selected_tool": selected_tool,
+		"hardcore": hardcore, "health": health, "hunger": hunger, "sanity": sanity,
+		"has_vest": has_vest, "spear_uses": spear_uses, "fresh": fresh,
+	}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -123,9 +218,22 @@ func from_dict(d: Dictionary) -> void:
 	for k in inv:
 		inventory[str(k)] = int(inv[k])
 	selected_tool = clampi(int(d.get("selected_tool", 0)), 0, TOOLS.size() - 1)
+	hardcore = bool(d.get("hardcore", false))
+	health = clampf(float(d.get("health", MAX_STAT)), 0.0, MAX_STAT)
+	hunger = clampf(float(d.get("hunger", MAX_STAT)), 0.0, MAX_STAT)
+	sanity = clampf(float(d.get("sanity", MAX_STAT)), 0.0, MAX_STAT)
+	has_vest = bool(d.get("has_vest", false))
+	spear_uses = int(d.get("spear_uses", 0))
+	fresh = {}
+	var fr: Dictionary = d.get("fresh", {})
+	for k in fr:
+		fresh[str(k)] = float(fr[k])
+	if health <= 0.0:
+		health = 50.0
 	EventBus.money_changed.emit(money)
 	EventBus.inventory_changed.emit()
 	EventBus.tool_changed.emit(selected_tool)
+	EventBus.stats_changed.emit()
 
 
 func _setup_input() -> void:

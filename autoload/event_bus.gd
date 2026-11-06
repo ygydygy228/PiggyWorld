@@ -10,3 +10,12 @@ signal day_started(day: int)
 signal weather_changed(kind: String)
 signal item_collected(id: String, amount: int)
 signal dialog_requested(speaker: String, lines: Array, action: String)
+signal build_menu_requested
+signal backpack_requested
+signal campfire_requested(obj: Node)
+signal stats_changed
+signal player_died
+signal player_hurt
+signal fade_requested(mid: Callable)
+signal placement_changed(active: bool, kind: String)
+signal placement_cancel_requested

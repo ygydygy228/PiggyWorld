@@ -16,6 +16,13 @@ var _res_labels: Dictionary = {}
 var _res_rows: Dictionary = {}
 var _res_panel: PanelContainer
 var _toast_tween: Tween
+var _cancel: Button
+var _stats_box: VBoxContainer
+var _bar_health: ProgressBar
+var _bar_hunger: ProgressBar
+var _bar_sanity: ProgressBar
+var _sanity_overlay: ColorRect
+var _hurt_overlay: ColorRect
 
 
 func _ready() -> void:
@@ -24,10 +31,12 @@ func _ready() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	_build_overlays(root)
 	_build_top_left(root)
 	_build_top_right(root)
 	_build_hotbar(root)
 	_build_toast(root)
+	_build_cancel(root)
 	EventBus.money_changed.connect(func(_m: int) -> void: _refresh())
 	EventBus.inventory_changed.connect(_refresh)
 	EventBus.tool_changed.connect(func(_i: int) -> void: _refresh())
@@ -35,6 +44,8 @@ func _ready() -> void:
 	EventBus.weather_changed.connect(func(_k: String) -> void: _refresh())
 	EventBus.day_started.connect(func(_d: int) -> void: _refresh())
 	EventBus.message.connect(show_toast)
+	EventBus.stats_changed.connect(_refresh_stats)
+	EventBus.player_hurt.connect(_flash_hurt)
 	_refresh()
 
 
@@ -62,6 +73,7 @@ func _build_top_left(root: Control) -> void:
 	v.add_child(_date)
 	_clock = Label.new()
 	v.add_child(_clock)
+	_build_stats(v)
 
 
 func _build_top_right(root: Control) -> void:
@@ -75,6 +87,20 @@ func _build_top_right(root: Control) -> void:
 		AudioManager.play("ui_click", 0.0)
 		menu_requested.emit())
 	v.add_child(menu)
+	var build := Button.new()
+	build.text = "Строить"
+	build.custom_minimum_size = Vector2(0, 22)
+	build.pressed.connect(func() -> void:
+		AudioManager.play("ui_click", 0.0)
+		EventBus.build_menu_requested.emit())
+	v.add_child(build)
+	var bag := Button.new()
+	bag.text = "Рюкзак"
+	bag.custom_minimum_size = Vector2(0, 22)
+	bag.pressed.connect(func() -> void:
+		AudioManager.play("ui_click", 0.0)
+		EventBus.backpack_requested.emit())
+	v.add_child(bag)
 	var panel := PanelContainer.new()
 	_res_panel = panel
 	v.add_child(panel)
@@ -130,6 +156,19 @@ func _build_toast(root: Control) -> void:
 	root.add_child(_toast)
 
 
+func _build_cancel(root: Control) -> void:
+	_cancel = Button.new()
+	_cancel.text = "Отмена стройки"
+	_cancel.visible = false
+	_cancel.pressed.connect(func() -> void:
+		AudioManager.play("ui_click", 0.0)
+		EventBus.placement_cancel_requested.emit())
+	root.add_child(_cancel)
+	_cancel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 4)
+	_cancel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	EventBus.placement_changed.connect(func(active: bool, _k: String) -> void: _cancel.visible = active)
+
+
 func show_toast(text: String) -> void:
 	_toast.text = text
 	_toast.modulate.a = 1.0
@@ -160,3 +199,68 @@ func _refresh() -> void:
 			_slots[i].add_theme_stylebox_override("normal", UiTheme.box(Color("#8a6a3a"), Color("#fff3d6"), 4.0))
 		else:
 			_slots[i].remove_theme_stylebox_override("normal")
+	_refresh_stats()
+
+
+func _build_overlays(root: Control) -> void:
+	_sanity_overlay = ColorRect.new()
+	_sanity_overlay.color = Color(0.35, 0.1, 0.5, 0.0)
+	_sanity_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_sanity_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_sanity_overlay)
+	_hurt_overlay = ColorRect.new()
+	_hurt_overlay.color = Color(0.85, 0.1, 0.1, 0.0)
+	_hurt_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_hurt_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_hurt_overlay)
+
+
+func _build_stats(parent: Node) -> void:
+	_stats_box = VBoxContainer.new()
+	_stats_box.add_theme_constant_override("separation", 2)
+	parent.add_child(_stats_box)
+	_bar_health = _bar(_stats_box, "ЗД", Color("#d9453f"))
+	_bar_hunger = _bar(_stats_box, "ЕДА", Color("#e8903a"))
+	_bar_sanity = _bar(_stats_box, "РАЗ", Color("#9a6ad8"))
+
+
+func _bar(parent: Node, caption: String, color: Color) -> ProgressBar:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 3)
+	parent.add_child(row)
+	var l := Label.new()
+	l.text = caption
+	l.custom_minimum_size = Vector2(26, 0)
+	row.add_child(l)
+	var b := ProgressBar.new()
+	b.custom_minimum_size = Vector2(64, 8)
+	b.max_value = 100.0
+	b.show_percentage = false
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	b.add_theme_stylebox_override("fill", UiTheme.box(color, color, 0.0, 0))
+	b.add_theme_stylebox_override("background", UiTheme.box(Color("#2a1d19"), Color("#e8c27a"), 0.0, 1))
+	row.add_child(b)
+	return b
+
+
+func _refresh_stats() -> void:
+	if _stats_box == null:
+		return
+	_stats_box.visible = GameState.hardcore
+	_bar_health.value = GameState.health
+	_bar_hunger.value = GameState.hunger
+	_bar_sanity.value = GameState.sanity
+
+
+func _flash_hurt() -> void:
+	_hurt_overlay.color.a = 0.35
+	create_tween().tween_property(_hurt_overlay, "color:a", 0.0, 0.35)
+
+
+func _process(_delta: float) -> void:
+	if _sanity_overlay == null:
+		return
+	var a := 0.0
+	if GameState.hardcore and GameState.sanity < 35.0:
+		a = clampf((35.0 - GameState.sanity) / 35.0, 0.0, 1.0) * (0.26 + 0.08 * sin(float(Time.get_ticks_msec()) / 400.0))
+	_sanity_overlay.color.a = a
