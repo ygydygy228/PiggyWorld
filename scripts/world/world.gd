@@ -680,7 +680,7 @@ func _spawn_creatures(saved: Dictionary) -> void:
 	for npc_id in NPC_HOMES:
 		var hc: Vector2i = NPC_HOMES[npc_id]
 		var n := Npc.new()
-		n.setup(str(npc_id), self, Vector2(hc.x * TILE + 8, (hc.y + 1) * TILE + 12))
+		n.setup(str(npc_id), Vector2(hc.x * TILE + 8, (hc.y + 1) * TILE + 12))
 		objects_node.add_child(n)
 
 
