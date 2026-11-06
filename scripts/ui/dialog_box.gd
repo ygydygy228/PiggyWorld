@@ -1,20 +1,25 @@
 extends Control
-## Окно диалога: печатает текст, по нажатию листает реплики.
+## Окно диалога с поддержкой выбора действий.
 
 signal finished
+signal chosen(index: int)
 
 var speaker: String = ""
 var lines: Array = []
+var choices: Array = []
 var _index: int = 0
 var _label: Label
+var _hint: Label
+var _choice_box: VBoxContainer
 var _typing: bool = true
 var _chars: float = 0.0
 var _born: int = 0
 
 
-func setup(p_speaker: String, p_lines: Array) -> void:
+func setup(p_speaker: String, p_lines: Array, p_choices: Array = []) -> void:
 	speaker = p_speaker
 	lines = p_lines
+	choices = p_choices
 
 
 func _ready() -> void:
@@ -37,11 +42,15 @@ func _ready() -> void:
 	_label.custom_minimum_size = Vector2(300, 40)
 	_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(_label)
-	var hint := Label.new()
-	hint.text = "нажми, чтобы продолжить"
-	hint.add_theme_color_override("font_color", Color("#b89c78"))
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	box.add_child(hint)
+	_hint = Label.new()
+	_hint.text = "нажми, чтобы продолжить"
+	_hint.add_theme_color_override("font_color", Color("#b89c78"))
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	box.add_child(_hint)
+	_choice_box = VBoxContainer.new()
+	_choice_box.add_theme_constant_override("separation", 4)
+	_choice_box.visible = false
+	box.add_child(_choice_box)
 	panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	panel.offset_left = 10
 	panel.offset_right = -10
@@ -52,6 +61,9 @@ func _ready() -> void:
 
 
 func _show_line() -> void:
+	if lines.is_empty():
+		_finish_lines()
+		return
 	_label.text = str(lines[_index])
 	_label.visible_characters = 0
 	_chars = 0.0
@@ -67,8 +79,29 @@ func _process(delta: float) -> void:
 			_label.visible_characters = -1
 
 
+func _finish_lines() -> void:
+	if not choices.is_empty():
+		_hint.visible = false
+		_choice_box.visible = true
+		for i in range(choices.size()):
+			var button := Button.new()
+			button.text = str(choices[i])
+			button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			button.pressed.connect(_choose.bind(i))
+			_choice_box.add_child(button)
+	else:
+		finished.emit()
+		queue_free()
+
+
+func _choose(index: int) -> void:
+	AudioManager.play("ui_click", 0.0, 0.6)
+	chosen.emit(index)
+	queue_free()
+
+
 func _advance() -> void:
-	if Time.get_ticks_msec() - _born < 250:
+	if Time.get_ticks_msec() - _born < 250 or not _choice_box.visible == false:
 		return
 	AudioManager.play("ui_click", 0.0, 0.6)
 	if _typing:
@@ -77,8 +110,7 @@ func _advance() -> void:
 		return
 	_index += 1
 	if _index >= lines.size():
-		finished.emit()
-		queue_free()
+		_finish_lines()
 	else:
 		_show_line()
 
