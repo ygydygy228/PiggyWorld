@@ -107,6 +107,16 @@ func _roll_weather() -> void:
 	set_weather(kind)
 
 
+## Сон: сразу следующее утро, погода перебрасывается, день начинается заново.
+func sleep_until_morning() -> void:
+	day += 1
+	time_of_day = START_TIME
+	_last_slot = -1
+	_roll_weather()
+	EventBus.day_started.emit(day)
+	EventBus.clock_changed.emit(day, hour(), minute())
+
+
 func to_dict() -> Dictionary:
 	return {"day": day, "time": time_of_day, "weather": weather}
 
