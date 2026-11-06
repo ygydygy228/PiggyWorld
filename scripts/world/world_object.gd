@@ -130,12 +130,56 @@ func _process(delta: float) -> void:
 
 
 func _set_texture(tex_name: String) -> void:
-	var tex: Texture2D = load("res://assets/objects/%s.png" % tex_name)
+	var texture_path := "res://assets/objects/%s.png" % tex_name
+	var tex: Texture2D
+	if ResourceLoader.exists(texture_path):
+		tex = load(texture_path)
+	else:
+		tex = _make_fallback_texture(tex_name)
 	sprite.texture = tex
 	if kind == "bridge":
 		sprite.offset = Vector2(-8, -15)
 	else:
 		sprite.offset = Vector2(-(tex.get_width() / float(sprite.hframes)) / 2.0, -tex.get_height() + 2.0)
+
+
+
+func _make_fallback_texture(tex_name: String) -> Texture2D:
+	var img := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	match tex_name:
+		"bed":
+			img.fill_rect(Rect2i(3, 12, 26, 16), Color("#684333"))
+			img.fill_rect(Rect2i(5, 8, 22, 15), Color("#d8c7a8"))
+			img.fill_rect(Rect2i(5, 8, 8, 7), Color("#f1e7d5"))
+			img.fill_rect(Rect2i(5, 22, 22, 5), Color("#a94e5c"))
+			img.fill_rect(Rect2i(3, 27, 4, 4), Color("#50352b"))
+			img.fill_rect(Rect2i(25, 27, 4, 4), Color("#50352b"))
+		"table":
+			img.fill_rect(Rect2i(3, 9, 26, 5), Color("#a66b3f"))
+			img.fill_rect(Rect2i(6, 14, 4, 15), Color("#70452f"))
+			img.fill_rect(Rect2i(22, 14, 4, 15), Color("#70452f"))
+			img.fill_rect(Rect2i(7, 6, 18, 3), Color("#c48a50"))
+		"bookshelf":
+			img.fill_rect(Rect2i(4, 2, 24, 29), Color("#70452f"))
+			img.fill_rect(Rect2i(7, 5, 18, 23), Color("#bd8b58"))
+			for y in [11, 19, 26]:
+				img.fill_rect(Rect2i(7, y, 18, 2), Color("#70452f"))
+			for x in [9, 14, 20, 24]:
+				img.fill_rect(Rect2i(x, 6, 3, 5), Color("#477b69"))
+				img.fill_rect(Rect2i(x, 13, 3, 5), Color("#b95d52"))
+				img.fill_rect(Rect2i(x, 21, 3, 4), Color("#d5b45e"))
+		"clock":
+			img.fill_rect(Rect2i(14, 2, 4, 5), Color("#70452f"))
+			img.fill_rect(Rect2i(8, 6, 16, 23), Color("#9a603b"))
+			img.fill_rect(Rect2i(10, 8, 12, 15), Color("#f0dca6"))
+			img.fill_rect(Rect2i(15, 11, 2, 6), Color("#554338"))
+			img.fill_rect(Rect2i(15, 15, 5, 2), Color("#554338"))
+			img.fill_rect(Rect2i(12, 29, 8, 2), Color("#70452f"))
+		_:
+			img.fill_rect(Rect2i(4, 8, 24, 18), Color("#8c6b50"))
+			img.fill_rect(Rect2i(7, 4, 18, 5), Color("#c69a63"))
+	return ImageTexture.create_from_image(img)
 
 
 func interaction() -> String:
