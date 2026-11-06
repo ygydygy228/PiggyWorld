@@ -137,5 +137,7 @@ func interact() -> String:
 		lines = ["Ой, уже поздно - лавка закрыта.", "Приходи днём, с семи утра. Я всегда рада тебя видеть!"]
 	elif action == "shop" and hearts >= 3:
 		lines.append("Кстати, для друзей у меня всегда есть скидка... шучу! Но заходи чаще.")
+	if action == "shop":
+		action = "shop:%s" % npc_id
 	EventBus.dialog_requested.emit(str(def["name"]), lines, action, hearts)
 	return "talk"

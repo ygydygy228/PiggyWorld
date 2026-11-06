@@ -18,3 +18,5 @@ export/
 shots/
 scripts/dev/_shot.gd
 *.log
+scripts/dev/_shop_sleep_check.gd
+scripts/dev/_hotbar_check.gd
