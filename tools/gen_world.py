@@ -9,7 +9,7 @@ ROOT = os.path.join(os.path.dirname(__file__), '..', 'assets')
 T = 16
 N, E, S, W = 1, 2, 4, 8
 
-def make_tex(base, dots, lights, seed, tufts=None, dot_p=0.13, light_p=0.05):
+def make_tex(base, dots, lights, seed, tufts=None, dot_p=0.13, light_p=0.05, detail=0.0):
     r = random.Random(seed)
     c = Canvas(T, T)
     for y in range(T):
@@ -19,10 +19,31 @@ def make_tex(base, dots, lights, seed, tufts=None, dot_p=0.13, light_p=0.05):
             if v < dot_p: col = dots
             elif v > 1 - light_p: col = lights
             c.set(x, y, col)
+    # пучки травы: короткие изогнутые штрихи вместо квадратов
+    for _ in range(r.randint(2, 4)):
+        x, y = r.randint(1, 12), r.randint(2, 13)
+        col = dots if r.random() < 0.6 else lights
+        c.set(x, y, col); c.set(x + 1, y, col); c.set(x + 1, y - 1, col)
+        if r.random() < 0.5:
+            c.set(x + 2, y - 1, col)
     if tufts:
-        for _ in range(r.randint(1, 3)):
+        for _ in range(r.randint(2, 4)):
             x, y = r.randint(2, 13), r.randint(3, 13)
             c.set(x, y, tufts[0]); c.set(x - 1, y - 1, tufts[1]); c.set(x + 1, y - 1, tufts[1])
+            if r.random() < 0.45:
+                c.set(x, y - 1, tufts[1])
+    if detail > 0.0:
+        # мелкие цветочки и камешки — «жизнь» на лугу
+        for _ in range(r.randint(0, 2)):
+            if r.random() > detail:
+                continue
+            x, y = r.randint(2, 12), r.randint(3, 12)
+            if r.random() < 0.55:
+                petal = r.choice((rgb('#f7f1d8'), rgb('#ffd95e'), rgb('#f4a5b5'), rgb('#c8b4f0')))
+                c.set(x, y, petal); c.set(x + 1, y, petal); c.set(x, y - 1, petal)
+                c.set(x + 1, y + 1, rgb('#4a8a45'))
+            else:
+                c.set(x, y, rgb('#9aa3a6')); c.set(x + 1, y + 1, rgb('#7d878c'))
     return c
 
 GRASS = dict(base=rgb('#6bb35a'), dots=rgb('#5fa44e'), lights=rgb('#82c76c'))
@@ -100,10 +121,14 @@ def build_tileset():
     sets = (('grass', GRASS, 1, GRASS_T), ('sand', SAND, 2, None), ('dirt', DIRT, 3, None))
     for name, spec, row, tufts in sets:
         for m in range(16):
-            tex = make_tex(spec['base'], spec['dots'], spec['lights'], 100 + row * 31 + m, tufts)
+            detail = 0.0
+            if name == 'grass':
+                detail = 0.55 if m % 3 == 0 else 0.0
+            tex = make_tex(spec['base'], spec['dots'], spec['lights'], 100 + row * 31 + m, tufts, detail=detail)
             sheet.paste(overlay_tile(tex, m, LIP[name]), m * T, row * T)
     for i in range(4):
-        sheet.paste(make_tex(GRASS['base'], GRASS['dots'], GRASS['lights'], 500 + i, GRASS_T, 0.16, 0.07), (2 + i) * T, 4 * T)
+        detail = 0.9 if i in (0, 2) else 0.0
+        sheet.paste(make_tex(GRASS['base'], GRASS['dots'], GRASS['lights'], 500 + i, GRASS_T, 0.16, 0.07, detail=detail), (2 + i) * T, 4 * T)
     sheet.paste(soil(False), 0, 4 * T)
     sheet.paste(soil(True), 1 * T, 4 * T)
     d = os.path.join(ROOT, 'tiles'); os.makedirs(d, exist_ok=True)

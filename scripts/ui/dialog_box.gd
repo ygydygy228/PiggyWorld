@@ -1,8 +1,10 @@
-extends Control
-## Окно диалога с поддержкой выбора действий.
+﻿extends Control
+## Окно диалога: портрет-плашка, печать текста, варианты ответа.
 
 signal finished
 signal chosen(index: int)
+
+const UiTheme := preload("res://scripts/ui/ui_theme.gd")
 
 var speaker: String = ""
 var lines: Array = []
@@ -11,9 +13,16 @@ var _index: int = 0
 var _label: Label
 var _hint: Label
 var _choice_box: VBoxContainer
+var _panel: PanelContainer
 var _typing: bool = true
 var _chars: float = 0.0
 var _born: int = 0
+
+
+func _init() -> void:
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
 func setup(p_speaker: String, p_lines: Array, p_choices: Array = []) -> void:
@@ -23,40 +32,57 @@ func setup(p_speaker: String, p_lines: Array, p_choices: Array = []) -> void:
 
 
 func _ready() -> void:
+	theme = UiTheme.shared()
 	_born = Time.get_ticks_msec()
-	process_mode = Node.PROCESS_MODE_ALWAYS
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	var panel := PanelContainer.new()
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(panel)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.35)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(dim)
+
+	# панель прижата к низу, растёт вверх вместе с числом вариантов
+	var wrap := VBoxContainer.new()
+	wrap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	wrap.offset_left = 8
+	wrap.offset_right = -8
+	wrap.offset_bottom = -8
+	wrap.offset_top = 8
+	wrap.alignment = BoxContainer.ALIGNMENT_END
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(wrap)
+
+	_panel = PanelContainer.new()
+	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrap.add_child(_panel)
+
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	panel.add_child(box)
-	var name_label := Label.new()
-	name_label.text = speaker
-	name_label.add_theme_color_override("font_color", Color("#ffd26a"))
-	box.add_child(name_label)
-	_label = Label.new()
+	box.add_theme_constant_override("separation", 3)
+	_panel.add_child(box)
+
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 5)
+	box.add_child(head)
+	var marker := ColorRect.new()
+	marker.color = UiTheme.BORDER
+	marker.custom_minimum_size = Vector2(3, 0)
+	head.add_child(marker)
+	var name_label := UiTheme.label(speaker, UiTheme.GOLD, 12)
+	head.add_child(name_label)
+
+	_label = UiTheme.label("", UiTheme.TEXT, 11)
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_label.custom_minimum_size = Vector2(300, 40)
+	_label.custom_minimum_size = Vector2(430, 26)
 	_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(_label)
-	_hint = Label.new()
-	_hint.text = "нажми, чтобы продолжить"
-	_hint.add_theme_color_override("font_color", Color("#b89c78"))
+
+	_hint = UiTheme.label("нажми, чтобы продолжить", UiTheme.MUTED, 9)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	box.add_child(_hint)
+
 	_choice_box = VBoxContainer.new()
-	_choice_box.add_theme_constant_override("separation", 4)
+	_choice_box.add_theme_constant_override("separation", 3)
 	_choice_box.visible = false
 	box.add_child(_choice_box)
-	panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	panel.offset_left = 10
-	panel.offset_right = -10
-	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	panel.offset_top = -92
-	panel.offset_bottom = -8
 	_show_line()
 
 
@@ -101,7 +127,7 @@ func _choose(index: int) -> void:
 
 
 func _advance() -> void:
-	if Time.get_ticks_msec() - _born < 250 or not _choice_box.visible == false:
+	if Time.get_ticks_msec() - _born < 250 or _choice_box.visible:
 		return
 	AudioManager.play("ui_click", 0.0, 0.6)
 	if _typing:
