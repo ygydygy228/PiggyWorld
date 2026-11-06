@@ -24,12 +24,17 @@ var _sanity_overlay: ColorRect
 var _hurt_overlay: ColorRect
 
 
+const UI_SIZE := Vector2(480, 270)
+const UI_SCALE := 2.0
+
+
 func _ready() -> void:
 	layer = 10
+	transform = Transform2D(Vector2(UI_SCALE, 0), Vector2(0, UI_SCALE), Vector2.ZERO)
 	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	root.size = UI_SIZE
 	root.theme = UiTheme.shared()
 	_build_vignette(root)
 	_build_overlays(root)

@@ -16,7 +16,11 @@ const CampfirePanel := preload("res://scripts/ui/campfire_panel.gd")
 
 const AUTOSAVE_SECONDS := 60.0
 
+const UI_SIZE := Vector2(480, 270)
+const UI_SCALE := 2.0
+
 var _ui: CanvasLayer
+var _ui_root: Control
 var _menu: MainMenu
 var _world: World
 var _hud: Hud
@@ -32,7 +36,13 @@ func _ready() -> void:
 	_ui = CanvasLayer.new()
 	_ui.layer = 30
 	_ui.process_mode = Node.PROCESS_MODE_ALWAYS
+	# Интерфейс рисуем в координатах 480x270 и растягиваем 2x: мир при этом виден шире.
+	_ui.transform = Transform2D(Vector2(UI_SCALE, 0), Vector2(0, UI_SCALE), Vector2.ZERO)
 	add_child(_ui)
+	_ui_root = Control.new()
+	_ui_root.size = UI_SIZE
+	_ui_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ui.add_child(_ui_root)
 	AudioManager.play_music()
 	EventBus.dialog_requested.connect(_on_dialog)
 	EventBus.build_menu_requested.connect(_on_build_menu)
@@ -61,7 +71,7 @@ func _notification(what: int) -> void:
 func _show_menu() -> void:
 	_stop_game()
 	_menu = MainMenu.new()
-	_ui.add_child(_menu)
+	_ui_root.add_child(_menu)
 	_menu.start_requested.connect(_start_game)
 
 
@@ -120,7 +130,7 @@ func _open_pause() -> void:
 		return
 	_set_paused(true)
 	_pause = PauseMenu.new()
-	_ui.add_child(_pause)
+	_ui_root.add_child(_pause)
 	_pause.resume_requested.connect(_close_pause)
 	_pause.save_requested.connect(_manual_save)
 	_pause.menu_requested.connect(_leave_to_menu)
@@ -163,7 +173,7 @@ func _on_dialog(speaker: String, lines: Array, action: String) -> void:
 		d.finished.connect(_on_dialog_finished.bind(action))
 	else:
 		d.chosen.connect(_on_dialog_choice.bind(action))
-	_ui.add_child(d)
+	_ui_root.add_child(d)
 
 
 func _on_dialog_finished(action: String) -> void:
@@ -173,7 +183,7 @@ func _on_dialog_finished(action: String) -> void:
 		shop.setup(action.substr(5))
 		_overlay = shop
 		shop.closed.connect(_close_overlay)
-		_ui.add_child(shop)
+		_ui_root.add_child(shop)
 	else:
 		_set_paused(false)
 
@@ -206,7 +216,7 @@ func _on_build_menu() -> void:
 	_overlay = m
 	m.closed.connect(_close_overlay)
 	m.chosen.connect(_on_build_chosen)
-	_ui.add_child(m)
+	_ui_root.add_child(m)
 
 
 func _on_build_chosen(kind: String) -> void:
@@ -231,7 +241,7 @@ func _run_fade(mid: Callable, after: Callable = Callable()) -> void:
 	fade.color = Color(0, 0, 0, 0)
 	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	fade.mouse_filter = Control.MOUSE_FILTER_STOP
-	_ui.add_child(fade)
+	_ui_root.add_child(fade)
 	var t := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	t.tween_property(fade, "color:a", 1.0, 0.45)
 	await t.finished
@@ -276,7 +286,7 @@ func _on_backpack() -> void:
 	var b := BackpackPanel.new()
 	_overlay = b
 	b.closed.connect(_close_overlay)
-	_ui.add_child(b)
+	_ui_root.add_child(b)
 
 
 func _on_campfire(fire: Node) -> void:
@@ -287,7 +297,7 @@ func _on_campfire(fire: Node) -> void:
 	c.setup(fire)
 	_overlay = c
 	c.closed.connect(_close_overlay)
-	_ui.add_child(c)
+	_ui_root.add_child(c)
 
 
 func _on_player_died() -> void:
@@ -302,7 +312,7 @@ func _on_player_died() -> void:
 	_set_paused(true)
 	var d := DialogBox.new()
 	d.setup("Конец дня", ["Свинка теряет сознание...", "Голод, холод или волчьи клыки взяли своё. Но утро всё равно наступит.", "Ты очнёшься дома. Часть вещей и монет потеряна."], ["Очнуться дома"])
-	_ui.add_child(d)
+	_ui_root.add_child(d)
 	_overlay = d
 	d.chosen.connect(_on_dialog_choice.bind("respawn"))
 

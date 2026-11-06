@@ -133,7 +133,7 @@ func _damage(amount: float, msg: String = "", flash: bool = false) -> void:
 		AudioManager.play("hurt", 0.05)
 
 
-## Урон от монстра. from_pos — откуда ударили (для отбрасывания).
+## Урон от монстра. from_pos - откуда ударили (для отбрасывания).
 func hit(amount: float, from_pos: Vector2) -> void:
 	if _dead or not GameState.hardcore:
 		return

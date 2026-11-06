@@ -55,7 +55,7 @@ func _run_smoke_test() -> void:
 	for frame in range(8):
 		await process_frame
 	# Даём микшеру реальное время отпустить проигрывания: в headless кадры идут
-	# без vsync, и одного счёта кадров не хватает — CI ловил "resources still in use".
+	# без vsync, и одного счёта кадров не хватает - CI ловил "resources still in use".
 	await create_timer(0.3).timeout
 
 	quit(0)
