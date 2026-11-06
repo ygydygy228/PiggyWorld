@@ -1,0 +1,60 @@
+name: Import Stage 5 Hardcore archive
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Stage 5 files
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import shutil
+
+          archive = Path("PiggyWorld_stage5_hardcore.zip")
+          if not archive.is_file():
+              raise SystemExit("Archive not found. Upload PiggyWorld_stage5_hardcore.zip to the repository root first.")
+
+          root = Path(".").resolve()
+          written = []
+          with ZipFile(archive) as z:
+              for item in z.infolist():
+                  if item.is_dir():
+                      continue
+                  rel = Path(item.filename)
+                  if rel.is_absolute() or ".." in rel.parts:
+                      raise SystemExit(f"Unsafe archive path: {item.filename}")
+                  target = (root / rel).resolve()
+                  if root not in target.parents:
+                      raise SystemExit(f"Unsafe archive path: {item.filename}")
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  with z.open(item) as src, target.open("wb") as dst:
+                      shutil.copyfileobj(src, dst)
+                  written.append(item.filename)
+
+          archive.unlink()
+          print(f"Imported {len(written)} files:")
+          print("\\n".join(written))
+          PY
+
+      - name: Commit imported files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Import Stage 5 Hardcore files"
+            git push
+          fi
