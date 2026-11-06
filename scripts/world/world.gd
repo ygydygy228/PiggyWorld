@@ -896,7 +896,7 @@ func _build_room() -> void:
 	filler.z_index = -20
 	add_child(filler)
 	var bg := Sprite2D.new()
-	bg.texture = load("res://assets/interior/room.png")
+	bg.texture = _make_room_texture()
 	bg.centered = false
 	bg.position = o
 	bg.z_index = -10
@@ -921,6 +921,26 @@ func _build_room() -> void:
 	_spawn("room_table", Vector2i.ZERO, "room_table", o + Vector2(226, 86))
 	_spawn("room_shelf", Vector2i.ZERO, "room_shelf", o + Vector2(124, 58))
 	_spawn("clock", Vector2i.ZERO, "room_clock", o + Vector2(176, 38))
+
+
+
+func _make_room_texture() -> Texture2D:
+	var img := Image.create(ROOM_W, ROOM_H, false, Image.FORMAT_RGBA8)
+	img.fill(Color("#76513d"))
+	img.fill_rect(Rect2i(0, 0, ROOM_W, 54), Color("#684535"))
+	img.fill_rect(Rect2i(0, 54, ROOM_W, ROOM_H - 54), Color("#b8875b"))
+	img.fill_rect(Rect2i(8, 8, ROOM_W - 16, 42), Color("#8c5d48"))
+	img.fill_rect(Rect2i(12, 58, ROOM_W - 24, ROOM_H - 70), Color("#c99a68"))
+	for y in range(66, ROOM_H - 8, 16):
+		img.fill_rect(Rect2i(12, y, ROOM_W - 24, 1), Color("#a97850"))
+	for x in range(20, ROOM_W - 8, 24):
+		img.fill_rect(Rect2i(x, 58, 1, ROOM_H - 70), Color("#b8875b"))
+	img.fill_rect(Rect2i(112, 8, 64, 36), Color("#b9d7d0"))
+	img.fill_rect(Rect2i(116, 12, 56, 28), Color("#77a9a5"))
+	img.fill_rect(Rect2i(142, 12, 3, 28), Color("#e8d6a5"))
+	img.fill_rect(Rect2i(116, 25, 56, 3), Color("#e8d6a5"))
+	img.fill_rect(Rect2i(0, 50, ROOM_W, 5), Color("#4a3028"))
+	return ImageTexture.create_from_image(img)
 
 
 func _apply_camera_limits() -> void:
