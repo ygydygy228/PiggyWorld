@@ -146,55 +146,106 @@ def shadow(c, cx, cy, rx, ry):
 def tree(w, h, variant):
     c = Canvas(w, h)
     cx = w // 2
-    trunk, trunk_d, trunk_l = rgb('#7a4f2e'), rgb('#5c3a22'), rgb('#9a6b43')
+    trunk, trunk_d, trunk_l = rgb('#7a4f2e'), rgb('#52331c'), rgb('#9a6b43')
+    bark = rgb('#6a4226')
     if variant == 2:  # сосна
-        c.rect(cx - 3, h - 18, 6, 18, trunk); c.rect(cx - 3, h - 18, 2, 18, trunk_l); c.rect(cx + 1, h - 18, 2, 18, trunk_d)
-        g, gd, gl = rgb('#2f7a4a'), rgb('#215c37'), rgb('#49a066')
-        for i, (yy, rr) in enumerate(((h - 20, 15), (h - 32, 12), (h - 43, 9), (h - 53, 6))):
+        c.rect(cx - 3, h - 20, 6, 20, trunk)
+        c.rect(cx - 3, h - 20, 2, 20, trunk_l); c.rect(cx + 2, h - 20, 1, 20, trunk_d)
+        for y in range(h - 20, h - 2, 3): c.set(cx - 1, y, bark)
+        g, gd, gl = rgb('#2f7a4a'), rgb('#1e5130'), rgb('#54a86f')
+        for yy, rr in ((h - 22, 16), (h - 34, 13), (h - 45, 10), (h - 54, 7)):
             for y in range(yy - 12, yy + 1):
                 half = int(rr * (y - (yy - 12)) / 12) + 1
                 for x in range(cx - half, cx + half + 1):
                     col = g
-                    if x > cx + half * 0.3 or y > yy - 3: col = gd
-                    if x < cx - half * 0.35 and y < yy - 4: col = gl
+                    if x > cx + half * 0.3 or y > yy - 2: col = gd
+                    if x < cx - half * 0.4 and y < yy - 4: col = gl
+                    if (x * 3 + y * 5) % 13 == 0 and y < yy - 5: col = gl
                     c.set(x, y, col)
+            # тень под ярусом
+            for x in range(cx - half, cx + half + 1):
+                c.set(x, yy, gd)
     else:
-        c.rect(cx - 4, h - 22, 8, 22, trunk); c.rect(cx - 4, h - 22, 3, 22, trunk_l); c.rect(cx + 2, h - 22, 2, 22, trunk_d)
-        c.rect(cx - 7, h - 3, 3, 3, trunk); c.rect(cx + 4, h - 3, 3, 3, trunk_d)  # корни
-        g, gd, gl = (rgb('#5aa84e'), rgb('#3f8a3f'), rgb('#7fcb68')) if variant == 0 else (rgb('#6bb050'), rgb('#4a9140'), rgb('#9bd870'))
-        blobs = [(cx, h - 38, 17, 14), (cx - 11, h - 30, 12, 10), (cx + 11, h - 30, 12, 10), (cx, h - 26, 15, 9)] if variant == 0 else \
-                [(cx, h - 40, 19, 15), (cx - 13, h - 30, 12, 10), (cx + 13, h - 31, 12, 10), (cx, h - 27, 16, 9), (cx - 5, h - 48, 9, 7)]
+        big = variant == 1
+        # ствол с расширением к корням
+        top = h - (40 if big else 34)
+        c.rect(cx - 4, top, 8, h - top - 2, trunk)
+        c.rect(cx - 4, top, 3, h - top - 2, trunk_l)
+        c.rect(cx + 2, top, 2, h - top - 2, trunk_d)
+        for y in range(top, h - 3, 4): c.set(cx - 1, y, bark)
+        c.rect(cx - 7, h - 5, 3, 3, trunk); c.rect(cx + 4, h - 5, 3, 3, trunk)
+        c.rect(cx - 5, h - 3, 10, 2, trunk_d)
+        g, gd, gl = (rgb('#5aa84e'), rgb('#377f38'), rgb('#83ce6c')) if not big else (rgb('#63b053'), rgb('#3f8a3f'), rgb('#9bda72'))
+        deep = rgb('#2c6630')
+        if big:
+            blobs = ((cx, h - 52, 20, 15), (cx - 14, h - 42, 14, 11), (cx + 14, h - 43, 14, 11),
+                     (cx, h - 38, 17, 10), (cx - 6, h - 62, 11, 8), (cx + 8, h - 60, 9, 7))
+        else:
+            blobs = ((cx, h - 46, 17, 13), (cx - 12, h - 38, 12, 10), (cx + 12, h - 38, 12, 10),
+                     (cx, h - 34, 14, 9))
         for bx, by, rx, ry in blobs:
-            c.ellipse(bx, by, rx, ry, g, gd, gl, 0.25, -0.35)
+            c.ellipse(bx, by, rx, ry, g, gd, gl, 0.3, -0.4)
+        # нижняя тень кроны
+        for bx, by, rx, ry in blobs[-2:]:
+            c.ellipse(bx, by + ry * 0.55, rx * 0.85, ry * 0.4, deep, None, None)
+        # солнечные блики и просветы
+        r = random.Random(w * 7 + h)
+        for _ in range(26 if big else 18):
+            bx, by, rx, ry = blobs[r.randrange(len(blobs))]
+            px = int(bx + r.uniform(-rx * 0.7, rx * 0.2))
+            py = int(by + r.uniform(-ry * 0.8, ry * 0.2))
+            c.set(px, py, gl if r.random() < 0.65 else gd)
         if variant == 1:
-            for px, py in ((cx - 10, h - 38), (cx + 8, h - 44), (cx + 12, h - 30), (cx - 3, h - 33)):
+            for px, py in ((cx - 10, h - 50), (cx + 9, h - 56), (cx + 13, h - 42), (cx - 4, h - 44)):
                 c.rect(px, py, 2, 2, rgb('#e8504a')); c.set(px, py, rgb('#ff8a80'))
     c.outline(OUTL)
-    shadow(c, cx, h - 2, 18, 4)
+    shadow(c, cx, h - 2, 18 if variant != 2 else 14, 4)
     return c
+
 
 def rock(w, h, big):
     c = Canvas(w, h)
-    cx, cy = w // 2, h - 8
-    c.ellipse(cx, cy, w // 2 - 2, h // 2 - 3, rgb('#9aa3a6'), rgb('#6f797e'), rgb('#c4cccd'), 0.2, -0.3)
+    cx, cy = w // 2, h - 7
+    base, dark, light = rgb('#9aa3a6'), rgb('#5f696e'), rgb('#cfd6d8')
+    c.ellipse(cx, cy, w // 2 - 2, h // 2 - 3, base, dark, light, 0.25, -0.35)
+    # грани
+    c.ellipse(cx - 4, cy - 5, w // 4, h // 5, rgb('#aab3b6'), rgb('#7d878c'), rgb('#dfe5e6'), 0.2, -0.4)
     if big:
-        c.ellipse(cx - 5, cy - 4, 6, 5, rgb('#a9b2b5'), rgb('#7d878c'), rgb('#d3dadb'), 0.2, -0.3)
-    c.set(cx + 3, cy - 1, rgb('#5d676c')); c.set(cx + 4, cy, rgb('#5d676c')); c.set(cx + 4, cy + 1, rgb('#5d676c'))
+        c.ellipse(cx + 6, cy - 2, w // 5, h // 6, rgb('#8f989c'), rgb('#6a7479'), rgb('#b9c2c5'), 0.3, -0.3)
+    # трещины
+    for x, y in ((cx + 2, cy - 4), (cx + 3, cy - 3), (cx + 3, cy - 2), (cx + 4, cy - 1)):
+        c.set(x, y, rgb('#4d575c'))
+    for x, y in ((cx - 6, cy), (cx - 5, cy + 1), (cx - 4, cy + 1)):
+        c.set(x, y, rgb('#576166'))
+    # мох у основания
+    moss = rgb('#5f9a4e')
+    for x in range(cx - w // 3, cx + w // 4):
+        if (x * 7 + h) % 5 < 2:
+            c.set(x, cy + h // 2 - 5, moss)
     c.outline(rgb('#3a4348'))
     shadow(c, cx, h - 2, w // 2, 3)
     return c
 
+
 def bush(berries):
-    w, h = 28, 22
+    w, h = 32, 24
     c = Canvas(w, h)
-    for bx, by, rx, ry in ((9, 13, 8, 7), (19, 13, 8, 7), (14, 9, 9, 7)):
-        c.ellipse(bx, by, rx, ry, rgb('#4f9e4a'), rgb('#37803c'), rgb('#76c364'), 0.25, -0.35)
+    g, gd, gl = rgb('#4f9e4a'), rgb('#357a37'), rgb('#7fca68')
+    deep = rgb('#2a5f2c')
+    for bx, by, rx, ry in ((9, 14, 8, 7), (23, 14, 8, 7), (16, 9, 10, 8)):
+        c.ellipse(bx, by, rx, ry, g, gd, gl, 0.3, -0.4)
+    for bx, by, rx, ry in ((9, 14, 8, 7), (23, 14, 8, 7)):
+        c.ellipse(bx, by + 4, rx * 0.9, 3, deep, None, None)
+    r = random.Random(11 if berries else 12)
+    for _ in range(14):
+        c.set(r.randint(5, 26), r.randint(5, 18), gl if r.random() < 0.6 else gd)
     if berries:
-        for px, py in ((8, 11), (15, 7), (20, 12), (12, 14), (17, 15)):
-            c.rect(px, py, 2, 2, rgb('#d63a5a')); c.set(px, py, rgb('#ff7f96'))
+        for px, py in ((8, 11), (16, 7), (22, 12), (13, 15), (19, 16), (11, 17)):
+            c.rect(px, py, 2, 2, rgb('#d63a5a')); c.set(px, py, rgb('#ff8a9c'))
     c.outline(OUTL)
-    shadow(c, 14, h - 2, 12, 3)
+    shadow(c, 16, h - 2, 13, 3)
     return c
+
 
 def flower(col, center):
     c = Canvas(T, T)
@@ -205,30 +256,49 @@ def flower(col, center):
     return c
 
 def house():
-    w, h = 64, 64
+    w, h = 72, 72
     c = Canvas(w, h)
-    wall, wall_d, wall_l = rgb('#e9cf9e'), rgb('#c9a972'), rgb('#f6e4be')
-    roof, roof_d, roof_l = rgb('#c9553d'), rgb('#9d3b2c'), rgb('#e2745a')
-    c.rect(8, 30, 48, 30, wall)
-    for y in range(32, 60, 4): c.rect(8, y, 48, 1, wall_d)
-    c.rect(8, 30, 48, 2, wall_l)
-    c.rect(52, 30, 4, 30, wall_d)
-    # крыша
-    for y in range(8, 32):
-        half = 8 + (y - 8) * 26 // 24 + 2
-        for x in range(32 - half, 32 + half):
+    wall, wall_d, wall_l = rgb('#e9cf9e'), rgb('#c19a63'), rgb('#f7e7c4')
+    roof, roof_d, roof_l = rgb('#c9553d'), rgb('#8f3527'), rgb('#e2745a')
+    stone, stone_d, stone_l = rgb('#8c9096'), rgb('#5f646a'), rgb('#b6bcc0')
+    c.rect(10, 40, 52, 22, wall)
+    for y in range(42, 62, 5): c.rect(10, y, 52, 1, wall_d)
+    for x in range(14, 60, 7): c.rect(x, 40, 1, 22, wall_d)
+    c.rect(10, 40, 52, 2, wall_l)
+    c.rect(10, 60, 52, 4, stone)
+    for x in range(12, 62, 6): c.rect(x, 61, 5, 3, stone_d if (x // 6) % 2 else stone_l)
+    # крыша: ряды черепицы
+    for row, y in enumerate(range(10, 40, 5)):
+        half = 10 + (y - 10) * 26 // 30 + 2
+        for x in range(36 - half, 36 + half):
             col = roof
-            if (y // 3 + (x // 4)) % 2 == 0: col = roof_d if (x // 4 + y // 3) % 3 == 0 else roof
-            if y % 3 == 0: col = roof_l if x % 8 < 4 else roof
-            c.set(x, y, col)
-    c.rect(44, 10, 6, 14, rgb('#8a6a55')); c.rect(43, 8, 8, 3, rgb('#6e523f'))
-    # дверь и окно
-    c.rect(26, 42, 12, 18, rgb('#7a4f2e')); c.rect(26, 42, 12, 2, rgb('#9a6b43')); c.set(35, 52, rgb('#f4d35e')); c.set(35, 53, rgb('#f4d35e'))
-    c.rect(13, 40, 9, 9, rgb('#8fd0e8')); c.rect(13, 40, 9, 1, rgb('#d8f1fa')); c.rect(17, 40, 1, 9, rgb('#7a4f2e')); c.rect(13, 44, 9, 1, rgb('#7a4f2e'))
-    c.rect(12, 49, 11, 2, rgb('#9a6b43'))
+            if row % 2 == 0: col = roof_d if (x // 5) % 2 == 0 else roof
+            if (x + row * 3) % 7 == 0: col = roof_l
+            c.set(x, y, col); c.set(x, y + 1, col)
+        for x in range(36 - half, 36 + half, 5):
+            c.set(x, y + 2, roof_d)
+    c.rect(36 - 12, 8, 24, 3, roof_l)
+    # труба
+    c.rect(48, 8, 7, 14, rgb('#8a6a55')); c.rect(47, 6, 9, 3, rgb('#6e523f'))
+    for y in range(9, 22, 3): c.rect(48, y, 7, 1, rgb('#755844'))
+    # дверь
+    c.rect(30, 48, 13, 18, rgb('#7a4f2e')); c.rect(30, 48, 13, 1, rgb('#9a6b43'))
+    for x in (34, 38): c.rect(x, 49, 1, 17, rgb('#5f3d24'))
+    c.rect(41, 57, 2, 2, rgb('#f4d35e'))
+    c.rect(29, 46, 15, 2, rgb('#9a6b43'))
+    # окна
+    for wx in (16, 50):
+        c.rect(wx, 46, 11, 10, rgb('#7a4f2e'))
+        c.rect(wx + 1, 47, 9, 8, rgb('#8fd0e8'))
+        c.rect(wx + 1, 47, 9, 2, rgb('#d8f1fa'))
+        c.rect(wx + 5, 47, 1, 8, rgb('#7a4f2e')); c.rect(wx + 1, 51, 9, 1, rgb('#7a4f2e'))
+        c.rect(wx, 56, 11, 2, rgb('#9a6b43'))
+        # ящик с цветами
+        c.set(wx + 2, 57, rgb('#e8504a')); c.set(wx + 5, 58, rgb('#f6d44a')); c.set(wx + 8, 57, rgb('#6a8cf0'))
     c.outline(rgb('#3d2a1f'))
-    shadow(c, 32, 61, 30, 3)
+    shadow(c, 36, 68, 34, 4)
     return c
+
 
 def crop(stage, kind='carrot'):
     c = Canvas(T, T)
@@ -251,11 +321,16 @@ def crop(stage, kind='carrot'):
 def fence():
     c = Canvas(T, T)
     wood, wd, wl = rgb('#a9754a'), rgb('#7d5233'), rgb('#c79566')
-    c.rect(1, 4, 3, 11, wood); c.rect(1, 4, 1, 11, wl); c.rect(3, 4, 1, 11, wd)
-    c.rect(12, 4, 3, 11, wood); c.rect(12, 4, 1, 11, wl); c.rect(14, 4, 1, 11, wd)
-    c.rect(4, 6, 8, 2, wood); c.rect(4, 6, 8, 1, wl); c.rect(4, 11, 8, 2, wood); c.rect(4, 12, 8, 1, wd)
+    for px in (1, 12):
+        c.rect(px, 3, 3, 12, wood); c.rect(px, 3, 1, 12, wl); c.rect(px + 2, 3, 1, 12, wd)
+        c.rect(px - 1, 2, 5, 2, wl)
+        c.set(px + 1, 5, wd); c.set(px + 1, 9, wd)
+    for ry in (6, 11):
+        c.rect(4, ry, 8, 2, wood); c.rect(4, ry, 8, 1, wl); c.rect(4, ry + 1, 8, 1, wd)
+        c.set(6, ry, wd); c.set(9, ry, wd)
     c.outline(rgb('#4a3020'))
     return c
+
 
 def main():
     build_tileset()
