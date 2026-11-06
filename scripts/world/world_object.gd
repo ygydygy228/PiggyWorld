@@ -19,6 +19,7 @@ const DEFS := {
 	"flower_white": {"tex": "flower_white", "harvest": true, "ground": true, "season": true},
 	"house": {"tex": "house", "col": Vector2(46, 20), "interact": "house"},
 	"fence": {"tex": "fence", "col": Vector2(14, 6)},
+	"chest": {"tex": "chest", "col": Vector2(14, 8), "interact": "chest"},
 	"cave": {"tex": "cave", "col": Vector2(44, 14), "interact": "cave"},
 	"bridge": {"tex": "bridge", "ground": true},
 	"bed": {"tex": "bed", "col": Vector2(38, 16), "interact": "bed"},
