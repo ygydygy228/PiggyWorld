@@ -1,4 +1,4 @@
-extends Node
+﻿extends Node
 ## Корень игры: меню → мир + интерфейс. Автосохранение, пауза, диалоги, магазин, стройка, сон.
 ## Все окна поверх игры лежат на отдельном CanvasLayer, иначе камера мира сдвигает их за экран.
 
@@ -157,12 +157,13 @@ func _on_dialog(speaker: String, lines: Array, action: String) -> void:
 		choices = ["Лечь спать", "Ещё нет"]
 	var d := DialogBox.new()
 	d.setup(speaker, lines, choices)
-	_ui.add_child(d)
+	# сигналы подключаем до add_child: _ready может сразу завершить диалог
 	_overlay = d
 	if choices.is_empty():
 		d.finished.connect(_on_dialog_finished.bind(action))
 	else:
 		d.chosen.connect(_on_dialog_choice.bind(action))
+	_ui.add_child(d)
 
 
 func _on_dialog_finished(action: String) -> void:
@@ -170,9 +171,9 @@ func _on_dialog_finished(action: String) -> void:
 	if action.begins_with("shop:"):
 		var shop := ShopPanel.new()
 		shop.setup(action.substr(5))
-		_ui.add_child(shop)
 		_overlay = shop
 		shop.closed.connect(_close_overlay)
+		_ui.add_child(shop)
 	else:
 		_set_paused(false)
 
@@ -202,10 +203,10 @@ func _on_build_menu() -> void:
 	_set_paused(true)
 	var m := BuildMenu.new()
 	m.indoors = _world.indoors
-	_ui.add_child(m)
 	_overlay = m
 	m.closed.connect(_close_overlay)
 	m.chosen.connect(_on_build_chosen)
+	_ui.add_child(m)
 
 
 func _on_build_chosen(kind: String) -> void:
@@ -273,9 +274,9 @@ func _on_backpack() -> void:
 		return
 	_set_paused(true)
 	var b := BackpackPanel.new()
-	_ui.add_child(b)
 	_overlay = b
 	b.closed.connect(_close_overlay)
+	_ui.add_child(b)
 
 
 func _on_campfire(fire: Node) -> void:
@@ -284,9 +285,9 @@ func _on_campfire(fire: Node) -> void:
 	_set_paused(true)
 	var c := CampfirePanel.new()
 	c.setup(fire)
-	_ui.add_child(c)
 	_overlay = c
 	c.closed.connect(_close_overlay)
+	_ui.add_child(c)
 
 
 func _on_player_died() -> void:
