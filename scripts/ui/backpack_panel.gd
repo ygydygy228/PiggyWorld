@@ -34,8 +34,8 @@ func _ready() -> void:
 	root.add_child(_stats)
 	var tabs := HBoxContainer.new()
 	root.add_child(tabs)
-	_items_tab = _tab(tabs, "Вещи", "items")
-	_craft_tab = _tab(tabs, "Крафт", "craft")
+	_items_tab = _make_tab(tabs, "Вещи", "items")
+	_craft_tab = _make_tab(tabs, "Крафт", "craft")
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(350, 150)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -54,7 +54,7 @@ func _ready() -> void:
 	_refresh()
 
 
-func _tab(parent: Node, text: String, tab: String) -> Button:
+func _make_tab(parent: Node, text: String, tab: String) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
