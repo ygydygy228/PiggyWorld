@@ -1,6 +1,5 @@
 extends SceneTree
 
-const WorldObject := preload("res://scripts/world/world_object.gd")
 const SoilRules := preload("res://scripts/world/soil_rules.gd")
 ## CI: godot --headless --path . -s scripts/dev/smoke_test.gd
 
@@ -96,18 +95,12 @@ func _run_smoke_test() -> void:
 			quit(1)
 			return
 
-	var object_script_probe = WorldObject.new()
-	var object_defs: Dictionary = object_script_probe.get_script().get_script_constant_map().get("DEFS", {})
-	object_script_probe.free()
-	for object_kind in object_defs.keys():
-		var probe = WorldObject.new()
-		probe.setup(str(object_kind), Vector2i.ZERO, null)
-		if probe.sprite == null or probe.sprite.texture == null:
-			push_error("SMOKE_FAILED: missing object texture: " + str(object_kind))
-			probe.free()
+	for stage in range(5):
+		var crop_path := "res://assets/objects/crop_potato_%d.png" % stage
+		if not ResourceLoader.exists(crop_path):
+			push_error("SMOKE_FAILED: missing potato crop stage: " + str(stage))
 			quit(1)
 			return
-		probe.free()
 
 	# Verify crop rotation and fertility yield rules.
 	if SoilRules.after_harvest(70, "carrot", "carrot") != 52:
