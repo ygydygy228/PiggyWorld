@@ -1,4 +1,4 @@
-﻿extends CanvasLayer
+extends CanvasLayer
 ## Игровой интерфейс: монеты, время, ресурсы, показатели, панель инструментов, сообщения.
 
 signal menu_requested
@@ -30,16 +30,19 @@ var _hurt_overlay: ColorRect
 const UI_SIZE := Vector2(480, 270)
 const UI_SCALE := 2.0
 
+var _ui_root: Control
+
 
 func _ready() -> void:
 	layer = 10
-	transform = Transform2D(Vector2(UI_SCALE, 0), Vector2(0, UI_SCALE), Vector2.ZERO)
 	var root := Control.new()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-	root.size = UI_SIZE
+	_ui_root = root
+	_apply_ui_layout()
+	get_viewport().size_changed.connect(_apply_ui_layout)
 	root.theme = UiTheme.shared()
-	_build_vignette(root)
+	# Permanent vignette removed: it was darkening the screen edges.
 	_build_overlays(root)
 	_build_top(root)
 	_build_hotbar(root)
@@ -54,6 +57,19 @@ func _ready() -> void:
 	EventBus.stats_changed.connect(_refresh_stats)
 	EventBus.player_hurt.connect(_flash_hurt)
 	_refresh()
+
+
+func _apply_ui_layout() -> void:
+	if _ui_root == null:
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		return
+	# Preserve the original design size while adapting to expanded mobile aspect ratios.
+	var ui_scale := minf(viewport_size.x / UI_SIZE.x, viewport_size.y / UI_SIZE.y)
+	ui_scale = clampf(ui_scale, 0.75, UI_SCALE)
+	transform = Transform2D(Vector2(ui_scale, 0.0), Vector2(0.0, ui_scale), Vector2.ZERO)
+	_ui_root.size = viewport_size / ui_scale
 
 
 func _build_vignette(root: Control) -> void:
@@ -215,13 +231,13 @@ func _build_hotbar(root: Control) -> void:
 	_hotbar.offset_left = 4
 	_hotbar.offset_right = -4
 	_hotbar.alignment = BoxContainer.ALIGNMENT_CENTER
-	_hotbar.add_theme_constant_override("separation", 3)
+	_hotbar.add_theme_constant_override("separation", 2)
 	root.add_child(_hotbar)
 	# Пул слотов: набор предметов меняется (скрафтили копьё, кончилась мазь),
 	# поэтому кнопки создаём один раз и только прячем лишние.
 	for i in range(MAX_SLOTS):
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(32, 32)
+		b.custom_minimum_size = Vector2(28, 28)
 		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.visible = false

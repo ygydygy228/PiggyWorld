@@ -94,8 +94,14 @@ func _read_save(path: String) -> Dictionary:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		return {}
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	# JSON.parse_string() logs parser errors to stderr. Corrupt saves are an
+	# expected recovery case, so use JSON.parse() and handle the error quietly.
+	var parser := JSON.new()
+	var parse_error := parser.parse(file.get_as_text())
 	file.close()
+	if parse_error != OK:
+		return {}
+	var parsed: Variant = parser.data
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return {}
 	var data: Dictionary = parsed

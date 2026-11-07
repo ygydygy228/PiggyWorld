@@ -37,7 +37,7 @@ func _ready() -> void:
 	theme = UiTheme.shared()
 	_born = Time.get_ticks_msec()
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.35)
+	dim.color = Color(0, 0, 0, 0.28)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
@@ -45,10 +45,10 @@ func _ready() -> void:
 	# панель прижата к низу, растёт вверх вместе с числом вариантов
 	var wrap := VBoxContainer.new()
 	wrap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	wrap.offset_left = 8
-	wrap.offset_right = -8
-	wrap.offset_bottom = -8
-	wrap.offset_top = 8
+	wrap.offset_left = 14
+	wrap.offset_right = -14
+	wrap.offset_bottom = -10
+	wrap.offset_top = 10
 	wrap.alignment = BoxContainer.ALIGNMENT_END
 	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(wrap)

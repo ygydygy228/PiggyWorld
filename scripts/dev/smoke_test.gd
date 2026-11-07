@@ -1,6 +1,7 @@
 extends SceneTree
 
 const SoilRules := preload("res://scripts/world/soil_rules.gd")
+const DungeonGenerator := preload("res://scripts/systems/dungeon_generator.gd")
 ## CI: godot --headless --path . -s scripts/dev/smoke_test.gd
 
 func _initialize() -> void:
@@ -116,6 +117,32 @@ func _run_smoke_test() -> void:
 		quit(1)
 		return
 
+	# Procedural dungeon: deterministic floors, connected exits and biome guardians.
+	var dungeon_generator = DungeonGenerator.new()
+	for depth in range(1, 13):
+		var first: Dictionary = dungeon_generator.generate_floor(depth, 24681357)
+		var repeated: Dictionary = dungeon_generator.generate_floor(depth, 24681357)
+		if first["seed"] != repeated["seed"] or first["grid"] != repeated["grid"]:
+			push_error("SMOKE_FAILED: dungeon seed is not deterministic at depth %d" % depth)
+			quit(1)
+			return
+		if int(first["rooms"].size()) < 5:
+			push_error("SMOKE_FAILED: dungeon has too few rooms at depth %d" % depth)
+			quit(1)
+			return
+		if not _dungeon_path_exists(first["grid"], first["start"], first["exit"]):
+			push_error("SMOKE_FAILED: dungeon exit is unreachable at depth %d" % depth)
+			quit(1)
+			return
+		if bool(first["boss_floor"]) != (depth % 4 == 0):
+			push_error("SMOKE_FAILED: guardian schedule is incorrect at depth %d" % depth)
+			quit(1)
+			return
+		if depth % 4 == 0 and str(first["boss"].get("id", "")) == "":
+			push_error("SMOKE_FAILED: guardian metadata missing at depth %d" % depth)
+			quit(1)
+			return
+
 	# Reject invalid negative inventory and currency changes.
 	var money_before: int = int(game_state.get("money"))
 	var wood_before: int = int(game_state.call("count", "wood"))
@@ -133,7 +160,7 @@ func _run_smoke_test() -> void:
 	for frame in range(200):
 		await process_frame
 
-	print("SMOKE_OK: menu, world, player, save recovery, economy and assets verified")
+	print("SMOKE_OK: menu, world, player, save recovery, economy, assets and dungeon generation verified")
 
 	var audio_manager := root.get_node_or_null("AudioManager")
 	main.queue_free()
@@ -144,3 +171,24 @@ func _run_smoke_test() -> void:
 		await process_frame
 	await create_timer(0.3).timeout
 	quit(0)
+
+
+func _dungeon_path_exists(grid: Array, start: Vector2i, target: Vector2i) -> bool:
+	var queue: Array[Vector2i] = [start]
+	var visited: Dictionary = {start: true}
+	var directions := [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]
+	var cursor := 0
+	while cursor < queue.size():
+		var cell := queue[cursor]
+		cursor += 1
+		if cell == target:
+			return true
+		for direction in directions:
+			var next: Vector2i = cell + direction
+			if next.y < 0 or next.y >= grid.size() or next.x < 0 or next.x >= grid[next.y].size():
+				continue
+			if int(grid[next.y][next.x]) == DungeonGenerator.WALL or visited.has(next):
+				continue
+			visited[next] = true
+			queue.append(next)
+	return false
