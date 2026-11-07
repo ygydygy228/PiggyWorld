@@ -231,13 +231,13 @@ func _build_hotbar(root: Control) -> void:
 	_hotbar.offset_left = 4
 	_hotbar.offset_right = -4
 	_hotbar.alignment = BoxContainer.ALIGNMENT_CENTER
-	_hotbar.add_theme_constant_override("separation", 3)
+	_hotbar.add_theme_constant_override("separation", 2)
 	root.add_child(_hotbar)
 	# Пул слотов: набор предметов меняется (скрафтили копьё, кончилась мазь),
 	# поэтому кнопки создаём один раз и только прячем лишние.
 	for i in range(MAX_SLOTS):
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(32, 32)
+		b.custom_minimum_size = Vector2(28, 28)
 		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.visible = false

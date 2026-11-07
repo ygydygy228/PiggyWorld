@@ -84,6 +84,8 @@ var built: Dictionary = {}
 var indoors: bool = false
 var in_cave: bool = false
 var cave_looted: bool = false
+var cave_shade: CanvasModulate
+var player_light: PointLight2D
 var dungeon_data: Dictionary = {}
 var survival: Survival
 var nav: AStarGrid2D
@@ -131,6 +133,7 @@ func _ready() -> void:
 	_restore_farm(saved)
 	_build_room()
 	_build_cave_room()
+	_setup_cave_lighting()
 	_spawn_player(saved)
 	var critters := Critters.new()
 	critters.setup(player)
@@ -165,11 +168,14 @@ func _process(delta: float) -> void:
 	_update_ghost()
 	if indoors:
 		AudioManager.set_ambient("")
-		if not _transitioning and player.position.y > _room_origin().y + _room_size().y - 6.0:
-			if in_cave:
-				exit_cave()
-			else:
-				exit_house()
+		if in_cave:
+			if not _transitioning:
+				var exit_cell: Vector2i = dungeon_data.get("exit", Vector2i(-1, -1))
+				var exit_pos := CAVE_ROOM_ORIGIN + Vector2(exit_cell.x * TILE + TILE / 2.0, exit_cell.y * TILE + TILE / 2.0)
+				if exit_cell.x >= 0 and player.position.distance_to(exit_pos) < 13.0:
+					exit_cave()
+		elif not _transitioning and player.position.y > _room_origin().y + _room_size().y - 6.0:
+			exit_house()
 	else:
 		AudioManager.set_ambient("ambient_night" if TimeSystem.is_night() else "ambient_day")
 
@@ -1070,6 +1076,31 @@ func _build_cave_room() -> void:
 				break
 
 
+
+
+## Пещерное освещение: общий холодный полумрак + тёплый круг света вокруг свинки.
+func _setup_cave_lighting() -> void:
+	cave_shade = CanvasModulate.new()
+	cave_shade.color = Color.WHITE
+	add_child(cave_shade)
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 0.82))
+	g.set_color(1, Color(0, 0, 0, 0))
+	g.add_point(0.5, Color(1, 1, 1, 0.42))
+	var tex := GradientTexture2D.new()
+	tex.gradient = g
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 128
+	tex.height = 128
+	player_light = PointLight2D.new()
+	player_light.texture = tex
+	player_light.energy = 0.75
+	player_light.texture_scale = 3.6
+	player_light.color = Color(1.0, 0.84, 0.62)
+	player_light.enabled = false
+
 func _make_cave_texture() -> Texture2D:
 	# Real 16x16 pixel-art tiles from 0x72 DungeonTileset II (CC0).
 	# The generator still controls the layout; this function only renders it.
@@ -1103,49 +1134,45 @@ func _make_cave_texture() -> Texture2D:
 	var r := RandomNumberGenerator.new()
 	r.seed = int(dungeon_data["seed"])
 
+	var wall_tint: Color = biome["wall"]
+	var floor_tint: Color = biome["floor"]
 	for y in range(CAVE_MAP_H):
 		for x in range(CAVE_MAP_W):
 			var tile := int(grid[y][x])
 			var destination := Vector2i(x * TILE, y * TILE)
 			if tile == DungeonGenerator.WALL:
+				# Тело стены + светлая кромка там, где стена смотрит на пол.
+				img.blit_rect(wall_images["mid"], Rect2i(0, 0, TILE, TILE), destination)
+				_tint_rect(img, destination, TILE, TILE, Color(0, 0, 0), 0.14)
+				_tint_rect(img, destination, TILE, TILE, wall_tint, 0.50)
 				var below_walkable := y + 1 < CAVE_MAP_H and int(grid[y + 1][x]) != DungeonGenerator.WALL
-				var left_walkable := x > 0 and int(grid[y][x - 1]) != DungeonGenerator.WALL
-				var right_walkable := x + 1 < CAVE_MAP_W and int(grid[y][x + 1]) != DungeonGenerator.WALL
-				var wall_key := "mid"
-				if below_walkable and left_walkable:
-					wall_key = "top_left"
-				elif below_walkable and right_walkable:
-					wall_key = "top_right"
-				elif below_walkable:
-					wall_key = "top_mid"
-				var wall_image: Image = wall_images.get(wall_key, wall_images["mid"])
-				img.blit_rect(wall_image, Rect2i(0, 0, TILE, TILE), destination)
+				if below_walkable:
+					var left_walkable := x > 0 and int(grid[y][x - 1]) != DungeonGenerator.WALL
+					var right_walkable := x + 1 < CAVE_MAP_W and int(grid[y][x + 1]) != DungeonGenerator.WALL
+					var cap_key := "top_mid"
+					if left_walkable:
+						cap_key = "top_left"
+					elif right_walkable:
+						cap_key = "top_right"
+					img.blit_rect(wall_images[cap_key], Rect2i(0, 12, TILE, 4), destination + Vector2i(0, 12))
 				continue
-
 			var floor_image: Image = floor_images[r.randi_range(0, floor_images.size() - 1)]
 			img.blit_rect(floor_image, Rect2i(0, 0, TILE, TILE), destination)
-
-			# Preserve the stone texture while tinting special floor features for each biome.
-			var tint := accent
-			var tint_strength := 0.0
+			_tint_rect(img, destination, TILE, TILE, floor_tint, 0.34)
+			_tint_rect(img, destination, TILE, TILE, Color(1, 1, 1), 0.07)
+			# мягкая тень от стены сверху - даёт глубину комнатам
+			if y > 0 and int(grid[y - 1][x]) == DungeonGenerator.WALL:
+				for py in range(3):
+					_tint_rect(img, destination + Vector2i(0, py), TILE, 1, Color(0, 0, 0), 0.34 - py * 0.08)
 			match tile:
 				DungeonGenerator.WATER:
-					tint = Color("#78b5ca")
-					tint_strength = 0.28
+					_draw_puddle(img, destination, r)
 				DungeonGenerator.CRYSTAL:
-					tint = accent.lightened(0.16)
-					tint_strength = 0.32
+					_draw_crystal(img, destination, r, accent)
 				DungeonGenerator.MUSHROOM:
-					tint = Color("#a77c9b")
-					tint_strength = 0.20
+					_draw_mushroom(img, destination, r)
 				DungeonGenerator.ASH:
-					tint = Color("#c87957")
-					tint_strength = 0.25
-			if tint_strength > 0.0:
-				for py in range(TILE):
-					for px in range(TILE):
-						var pixel := img.get_pixel(destination.x + px, destination.y + py)
-						img.set_pixel(destination.x + px, destination.y + py, pixel.lerp(tint, tint_strength))
+					_draw_ash(img, destination, r)
 
 	# Entrance and exit use actual tiles from the pack, not colored markers.
 	var start_cell: Vector2i = dungeon_data["start"]
@@ -1183,6 +1210,61 @@ func _make_cave_texture() -> Texture2D:
 
 	return ImageTexture.create_from_image(img)
 
+
+
+## Мягкая заливка участка картинки цветом с прозрачностью.
+func _tint_rect(img: Image, origin: Vector2i, w: int, h: int, color: Color, strength: float) -> void:
+	for py in range(h):
+		for px in range(w):
+			var x := origin.x + px
+			var y := origin.y + py
+			if x < 0 or y < 0 or x >= img.get_width() or y >= img.get_height():
+				continue
+			var pixel := img.get_pixel(x, y)
+			if pixel.a <= 0.0:
+				continue
+			img.set_pixel(x, y, pixel.lerp(Color(color.r, color.g, color.b, pixel.a), strength))
+
+
+func _draw_puddle(img: Image, o: Vector2i, r: RandomNumberGenerator) -> void:
+	var water := Color("#3f7f96")
+	for i in range(3):
+		var px := o.x + r.randi_range(3, 11)
+		var py := o.y + r.randi_range(4, 11)
+		img.set_pixel(px, py, water)
+		img.set_pixel(px + 1, py, water.lightened(0.2))
+		img.set_pixel(px, py + 1, water.darkened(0.15))
+
+
+func _draw_crystal(img: Image, o: Vector2i, r: RandomNumberGenerator, accent: Color) -> void:
+	var b := o + Vector2i(r.randi_range(5, 9), r.randi_range(4, 9))
+	for i in range(4):
+		img.set_pixel(b.x + i, b.y, accent)
+	img.set_pixel(b.x + 1, b.y - 1, accent.lightened(0.35))
+	img.set_pixel(b.x + 2, b.y - 2, accent.lightened(0.5))
+	img.set_pixel(b.x + 3, b.y + 1, accent.darkened(0.2))
+
+
+func _draw_mushroom(img: Image, o: Vector2i, r: RandomNumberGenerator) -> void:
+	var b := o + Vector2i(r.randi_range(4, 11), r.randi_range(6, 11))
+	var cap := Color("#c98a9b") if r.randf() < 0.5 else Color("#d8b46a")
+	img.set_pixel(b.x, b.y, Color("#e8ddc8"))
+	img.set_pixel(b.x + 1, b.y, Color("#d8cbb2"))
+	img.set_pixel(b.x - 1, b.y - 1, cap)
+	img.set_pixel(b.x, b.y - 1, cap.lightened(0.2))
+	img.set_pixel(b.x + 1, b.y - 1, cap)
+
+
+func _draw_ash(img: Image, o: Vector2i, r: RandomNumberGenerator) -> void:
+	var b := o + Vector2i(r.randi_range(3, 10), r.randi_range(4, 11))
+	var ash := Color("#8a6a63")
+	for i in range(4):
+		var px := b.x + r.randi_range(-2, 3)
+		var py := b.y + r.randi_range(-1, 2)
+		img.set_pixel(px, py, ash if i % 2 == 0 else ash.lightened(0.15))
+	img.set_pixel(b.x, b.y, Color("#d98a5a"))
+
+
 func _texture_image_rgba(texture: Texture2D) -> Image:
 	var image := texture.get_image()
 	if image.get_format() != Image.FORMAT_RGBA8:
@@ -1218,9 +1300,15 @@ func _room_size() -> Vector2:
 
 func _apply_camera_limits() -> void:
 	var cam: Camera2D = player.camera
-	if indoors:
-		# The house stays close-up; the larger cave uses a wider view.
-		cam.zoom = Vector2(1.5, 1.5) if in_cave else Vector2(2, 2)
+	if indoors and in_cave:
+		# Пещера большая: камера едет за свинкой, границы - весь этаж.
+		cam.zoom = Vector2(1.5, 1.5)
+		cam.limit_left = int(CAVE_ROOM_ORIGIN.x)
+		cam.limit_top = int(CAVE_ROOM_ORIGIN.y)
+		cam.limit_right = int(CAVE_ROOM_ORIGIN.x + CAVE_W)
+		cam.limit_bottom = int(CAVE_ROOM_ORIGIN.y + CAVE_H)
+	elif indoors:
+		cam.zoom = Vector2(2, 2)
 		var vs := get_viewport().get_visible_rect().size / cam.zoom
 		var c := _room_origin() + _room_size() / 2.0
 		# Границы ровно по кадру: маленькая комната жёстко центрируется,
@@ -1230,7 +1318,7 @@ func _apply_camera_limits() -> void:
 		cam.limit_top = int(c.y - vs.y / 2.0)
 		cam.limit_bottom = int(c.y + vs.y / 2.0)
 	else:
-		cam.zoom = Vector2(1, 1)
+		cam.zoom = Vector2(1.25, 1.25)
 		cam.limit_left = 0
 		cam.limit_top = 0
 		cam.limit_right = MAP_W * TILE
@@ -1292,6 +1380,14 @@ func _do_enter_cave() -> void:
 	player.facing = Vector2.UP
 	weather_fx.visible = false
 	_apply_camera_limits()
+	if cave_shade != null:
+		cave_shade.color = Color(0.42, 0.44, 0.58)
+	if player_light != null and is_instance_valid(player):
+		if player_light.get_parent() != null:
+			player_light.get_parent().remove_child(player_light)
+		player.add_child(player_light)
+		player_light.position = Vector2(0, -10)
+		player_light.enabled = true
 	EventBus.message.emit("Пещера: сыро и тихо. Где-то капает вода.")
 
 
@@ -1311,6 +1407,10 @@ func _do_exit_cave() -> void:
 	player.position = out
 	player.facing = Vector2.DOWN
 	weather_fx.visible = true
+	if cave_shade != null:
+		cave_shade.color = Color.WHITE
+	if player_light != null:
+		player_light.enabled = false
 	_apply_camera_limits()
 
 
