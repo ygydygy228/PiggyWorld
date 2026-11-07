@@ -7,6 +7,7 @@ const BACKUP_PATH := "user://piggyworld_save.json.bak"
 const SAVE_VERSION := 2
 
 var pending: Dictionary = {}
+var _loaded_from_backup: bool = false
 
 
 func has_save() -> bool:
@@ -46,10 +47,31 @@ func save_game(world: Node) -> bool:
 		push_warning("SaveSystem: ошибка записи временного файла (код %d)" % write_error)
 		return false
 
+	# После восстановления из backup не перезаписываем единственную хорошую копию
+	# повреждённым основным файлом.
+	if _loaded_from_backup and FileAccess.file_exists(PATH):
+		var corrupt_path := PATH + ".corrupt"
+		var corrupt_absolute := ProjectSettings.globalize_path(corrupt_path)
+		if FileAccess.file_exists(corrupt_path):
+			DirAccess.remove_absolute(corrupt_absolute)
+		var quarantine_error := DirAccess.rename_absolute(save_absolute, corrupt_absolute)
+		if quarantine_error != OK:
+			DirAccess.remove_absolute(temp_absolute)
+			push_warning("SaveSystem: не удалось изолировать повреждённое сохранение (код %d)" % quarantine_error)
+			return false
+		var recovered_error := DirAccess.rename_absolute(temp_absolute, save_absolute)
+		if recovered_error != OK:
+			DirAccess.rename_absolute(corrupt_absolute, save_absolute)
+			push_warning("SaveSystem: не удалось записать восстановленное сохранение (код %d)" % recovered_error)
+			return false
+		DirAccess.remove_absolute(corrupt_absolute)
+		_loaded_from_backup = false
+		return true
+
 	# Сначала сохраняем предыдущую версию, затем заменяем основной файл.
-	if FileAccess.file_exists(BACKUP_PATH):
-		DirAccess.remove_absolute(backup_absolute)
 	if FileAccess.file_exists(PATH):
+		if FileAccess.file_exists(BACKUP_PATH):
+			DirAccess.remove_absolute(backup_absolute)
 		var backup_error := DirAccess.rename_absolute(save_absolute, backup_absolute)
 		if backup_error != OK:
 			DirAccess.remove_absolute(temp_absolute)
@@ -62,6 +84,7 @@ func save_game(world: Node) -> bool:
 			DirAccess.rename_absolute(backup_absolute, save_absolute)
 		push_warning("SaveSystem: не удалось завершить сохранение (код %d)" % replace_error)
 		return false
+	_loaded_from_backup = false
 	return true
 
 
@@ -90,9 +113,11 @@ func _read_save(path: String) -> Dictionary:
 
 func load_game() -> bool:
 	pending = _read_save(PATH)
-	if pending.is_empty():
+	_loaded_from_backup = pending.is_empty()
+	if _loaded_from_backup:
 		pending = _read_save(BACKUP_PATH)
 	if pending.is_empty():
+		_loaded_from_backup = false
 		push_warning("SaveSystem: основное и резервное сохранения отсутствуют или повреждены")
 		return false
 	GameState.from_dict(pending.get("state", {}))
