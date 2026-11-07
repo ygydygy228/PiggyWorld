@@ -37,6 +37,43 @@ func _run_smoke_test() -> void:
 		quit(1)
 		return
 
+	# Проверяем резервное сохранение: повреждённый основной файл должен восстановиться.
+	var original_money: int = GameState.money
+	if not SaveSystem.save_game(world):
+		push_error("SMOKE_FAILED: initial save failed")
+		quit(1)
+		return
+	GameState.add_money(7)
+	if not SaveSystem.save_game(world):
+		push_error("SMOKE_FAILED: second save failed")
+		quit(1)
+		return
+	var corrupt_file := FileAccess.open(SaveSystem.PATH, FileAccess.WRITE)
+	if corrupt_file == null:
+		push_error("SMOKE_FAILED: cannot prepare save recovery test")
+		quit(1)
+		return
+	corrupt_file.store_string("{broken json")
+	corrupt_file.close()
+	if not SaveSystem.load_game() or GameState.money != original_money:
+		push_error("SMOKE_FAILED: backup save recovery failed")
+		quit(1)
+		return
+
+	# Отрицательные значения не должны добавлять предметы или деньги.
+	var money_before_invalid_change: int = GameState.money
+	var wood_before_invalid_change: int = GameState.count("wood")
+	GameState.add_money(-10)
+	if GameState.spend_money(-10) or GameState.money != money_before_invalid_change:
+		push_error("SMOKE_FAILED: invalid money mutation was accepted")
+		quit(1)
+		return
+	GameState.add_item("wood", -1)
+	if GameState.remove_item("wood", -1) or GameState.count("wood") != wood_before_invalid_change:
+		push_error("SMOKE_FAILED: invalid inventory mutation was accepted")
+		quit(1)
+		return
+
 	# Даём сценам, анимациям и игровым системам время пройти _ready/_process.
 	for frame in range(200):
 		await process_frame
