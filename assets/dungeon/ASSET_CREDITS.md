@@ -5,7 +5,7 @@
 - Author: 0x72 (Robert)
 - Original source: https://0x72.itch.io/dungeontileset-ii
 - License: CC0 1.0 Universal
-- Used: floor variants, wall pieces, entrance/exit tiles, stone pillar and crate.
+- Used: floor variants, wall pieces, entrance/exit tiles, stone pillar and crate; torches, banners and skulls are cut from atlas_walls_high-16x32.png and skull.png of the same pack.
 - The original sprites are used as supplied on the game's 16x16 grid.
 
 The PNG frames were retrieved from a public mirror:

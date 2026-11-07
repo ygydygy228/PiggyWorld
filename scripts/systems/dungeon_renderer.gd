@@ -82,6 +82,7 @@ static func build_texture(data: Dictionary, lit_seals: Array) -> Texture2D:
 
 	_draw_entrance_and_exit(img, data)
 	_draw_columns_and_crates(img, data)
+	_draw_wall_props(img, data)
 	_draw_seals(img, data, lit_seals, accent)
 	return ImageTexture.create_from_image(img)
 
@@ -126,6 +127,56 @@ static func _draw_columns_and_crates(img: Image, data: Dictionary) -> void:
 
 
 ## Печати: три руны на полу, плюс подсказка на стене стартовой комнаты.
+
+
+## Факелы, знамёна и мелкий декор: атмосфера и ориентиры в комнатах.
+static func _draw_wall_props(img: Image, data: Dictionary) -> void:
+	var atlas := load("res://assets/dungeon/0x72/atlas_walls_high-16x32.png") as Texture2D
+	if atlas == null:
+		return
+	var atlas_img := _texture_image_rgba(atlas)
+	var torch := _slice(atlas_img, Rect2i(13 * 16, 0, 16, 32))
+	var banner_cols := [17, 18, 19, 20]
+	var skull_tex := load("res://assets/dungeon/0x72/skull.png") as Texture2D
+	var skull := _texture_image_rgba(skull_tex) if skull_tex != null else null
+	var r := RandomNumberGenerator.new()
+	r.seed = int(data["seed"]) + 77
+	var grid: Array = data["grid"]
+	var rooms: Array = data["rooms"]
+	for idx in range(rooms.size()):
+		var room: Dictionary = rooms[idx]
+		var rect: Rect2i = room["rect"]
+		var kind := str(room["type"])
+		# факел на стене сверху комнаты
+		var torch_cell := Vector2i(rect.position.x + 2, rect.position.y - 1)
+		if kind == "boss":
+			torch_cell = Vector2i(rect.get_center().x, rect.position.y - 1)
+		if _is_wall(grid, torch_cell):
+			img.blit_rect(torch, Rect2i(0, 0, 16, 32), Vector2i(torch_cell.x * 16, torch_cell.y * 16 - 16))
+		# знамя в каждой третьей комнате
+		if idx % 3 == 1:
+			var banner_cell := Vector2i(rect.end.x - 3, rect.position.y - 1)
+			if _is_wall(grid, banner_cell):
+				var banner := _slice(atlas_img, Rect2i(banner_cols[idx % banner_cols.size()] * 16, 32, 16, 32))
+				img.blit_rect(banner, Rect2i(0, 0, 16, 32), Vector2i(banner_cell.x * 16, banner_cell.y * 16 - 16))
+		# черепа и кости у стен
+		if skull != null and r.randf() < 0.5:
+			var spot := Vector2i(rect.position.x + r.randi_range(1, maxi(1, rect.size.x - 2)), rect.end.y - 1)
+			if not _is_wall(grid, spot):
+				img.blit_rect(skull, Rect2i(0, 0, 16, 16), spot * 16)
+
+
+static func _slice(src: Image, rect: Rect2i) -> Image:
+	var out := Image.create(rect.size.x, rect.size.y, false, Image.FORMAT_RGBA8)
+	out.blit_rect(src, rect, Vector2i.ZERO)
+	return out
+
+
+static func _is_wall(grid: Array, cell: Vector2i) -> bool:
+	if cell.y < 0 or cell.y >= grid.size() or cell.x < 0 or cell.x >= grid[cell.y].size():
+		return false
+	return int(grid[cell.y][cell.x]) == WALL
+
 static func _draw_seals(img: Image, data: Dictionary, lit: Array, accent: Color) -> void:
 	var seals: Array = data.get("seals", [])
 	if seals.is_empty():
