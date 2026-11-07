@@ -113,6 +113,10 @@ func generate_floor(depth: int, seed_value: int, width: int = DEFAULT_WIDTH, hei
 		var b := Vector2i(rooms[i + 1].get_center())
 		_carve_corridor(grid, a, b, rng)
 
+	# The final room always has a clear route to the surface exit at the south edge.
+	var exit_cell := Vector2i(w / 2, h - 2)
+	_carve_corridor(grid, Vector2i(rooms[rooms.size() - 1].get_center()), exit_cell, rng)
+
 	var boss_floor := safe_depth % 4 == 0
 	var room_data: Array[Dictionary] = []
 	for i in range(rooms.size()):
@@ -137,9 +141,6 @@ func generate_floor(depth: int, seed_value: int, width: int = DEFAULT_WIDTH, hei
 	var start_cell: Vector2i = room_data[0]["center"]
 	var final_room: Dictionary = room_data[room_data.size() - 1]
 	var final_center: Vector2i = final_room["center"]
-	var exit_cell := final_center + Vector2i(2, 0)
-	if not _is_floor(grid, exit_cell):
-		exit_cell = final_center
 
 	var boss: Dictionary = {}
 	if boss_floor:
