@@ -118,6 +118,8 @@ func is_perishable(id: String) -> bool:
 
 
 func add_item(id: String, amount: int = 1) -> void:
+	if amount <= 0 or not ITEMS.has(id):
+		return
 	var old := count(id)
 	inventory[id] = old + amount
 	if is_perishable(id):
@@ -127,7 +129,7 @@ func add_item(id: String, amount: int = 1) -> void:
 
 
 func remove_item(id: String, amount: int = 1) -> bool:
-	if count(id) < amount:
+	if amount <= 0 or count(id) < amount:
 		return false
 	inventory[id] = count(id) - amount
 	if inventory[id] <= 0:
@@ -206,12 +208,14 @@ func add_heart(id: String) -> int:
 
 
 func add_money(amount: int) -> void:
+	if amount <= 0:
+		return
 	money = maxi(0, money + amount)
 	EventBus.money_changed.emit(money)
 
 
 func spend_money(amount: int) -> bool:
-	if money < amount:
+	if amount <= 0 or money < amount:
 		return false
 	money -= amount
 	EventBus.money_changed.emit(money)
