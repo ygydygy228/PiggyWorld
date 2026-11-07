@@ -1,7 +1,6 @@
 extends SceneTree
 
 const WorldObject := preload("res://scripts/world/world_object.gd")
-const GameStateScript := preload("res://autoload/game_state.gd")
 ## CI: godot --headless --path . -s scripts/dev/smoke_test.gd
 
 func _initialize() -> void:
@@ -89,14 +88,16 @@ func _run_smoke_test() -> void:
 		return
 
 	# Verify all item icons and world-object textures, including generated fallbacks.
-	var item_defs: Dictionary = GameStateScript.get_script_constant_map().get("ITEMS", {})
+	var item_defs: Dictionary = game_state.get_script().get_script_constant_map().get("ITEMS", {})
 	for item_id in item_defs.keys():
 		if game_state.call("item_icon", str(item_id)) == null:
 			push_error("SMOKE_FAILED: missing item icon: " + str(item_id))
 			quit(1)
 			return
 
-	var object_defs: Dictionary = WorldObject.get_script_constant_map().get("DEFS", {})
+	var object_script_probe = WorldObject.new()
+	var object_defs: Dictionary = object_script_probe.get_script().get_script_constant_map().get("DEFS", {})
+	object_script_probe.free()
 	for object_kind in object_defs.keys():
 		var probe = WorldObject.new()
 		probe.setup(str(object_kind), Vector2i.ZERO, null)
