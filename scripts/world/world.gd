@@ -1080,13 +1080,13 @@ func _make_cave_texture() -> Texture2D:
 	for i in range(1, 5):
 		var floor_texture := load("res://assets/dungeon/0x72/floor_%d.png" % i) as Texture2D
 		if floor_texture != null:
-			floor_images.append(floor_texture.get_image())
+			floor_images.append(_texture_image_rgba(floor_texture))
 
 	var wall_images: Dictionary = {}
 	for wall_name in ["mid", "top_mid", "top_left", "top_right"]:
 		var wall_texture := load("res://assets/dungeon/0x72/wall_%s.png" % wall_name) as Texture2D
 		if wall_texture != null:
-			wall_images[wall_name] = wall_texture.get_image()
+			wall_images[wall_name] = _texture_image_rgba(wall_texture)
 
 	var ladder_texture := load("res://assets/dungeon/0x72/floor_ladder.png") as Texture2D
 	var stairs_texture := load("res://assets/dungeon/0x72/floor_stairs.png") as Texture2D
@@ -1151,13 +1151,13 @@ func _make_cave_texture() -> Texture2D:
 	var start_cell: Vector2i = dungeon_data["start"]
 	var exit_cell: Vector2i = dungeon_data["exit"]
 	if ladder_texture != null:
-		img.blit_rect(ladder_texture.get_image(), Rect2i(0, 0, TILE, TILE), start_cell * TILE)
+		img.blit_rect(_texture_image_rgba(ladder_texture), Rect2i(0, 0, TILE, TILE), start_cell * TILE)
 	if stairs_texture != null:
-		img.blit_rect(stairs_texture.get_image(), Rect2i(0, 0, TILE, TILE), exit_cell * TILE)
+		img.blit_rect(_texture_image_rgba(stairs_texture), Rect2i(0, 0, TILE, TILE), exit_cell * TILE)
 
 	# Add a couple of tall stone pillars to the guardian chamber and a crate to treasure rooms.
 	if column_texture != null:
-		var column_image := column_texture.get_image()
+		var column_image := _texture_image_rgba(column_texture)
 		for room in dungeon_data["rooms"]:
 			if str(room["type"]) != "boss":
 				continue
@@ -1171,7 +1171,7 @@ func _make_cave_texture() -> Texture2D:
 					img.blit_rect(column_image, Rect2i(0, 0, 16, 48), column_pos)
 
 	if crate_texture != null:
-		var crate_image := crate_texture.get_image()
+		var crate_image := _texture_image_rgba(crate_texture)
 		for room in dungeon_data["rooms"]:
 			if str(room["type"]) != "treasure":
 				continue
@@ -1182,6 +1182,12 @@ func _make_cave_texture() -> Texture2D:
 				img.blit_rect(crate_image, Rect2i(0, 0, 16, 24), crate_pos)
 
 	return ImageTexture.create_from_image(img)
+
+func _texture_image_rgba(texture: Texture2D) -> Image:
+	var image := texture.get_image()
+	if image.get_format() != Image.FORMAT_RGBA8:
+		image.convert(Image.FORMAT_RGBA8)
+	return image
 
 func _make_room_texture() -> Texture2D:
 	var img := Image.create(ROOM_W, ROOM_H, false, Image.FORMAT_RGBA8)
