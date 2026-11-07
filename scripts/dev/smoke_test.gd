@@ -1,4 +1,6 @@
 extends SceneTree
+
+const WorldObject := preload("res://scripts/world/world_object.gd")
 ## Запускает главное меню, начинает новую игру и проверяет базовые узлы мира.
 ## CI: godot --headless --path . -s scripts/dev/smoke_test.gd
 
@@ -59,6 +61,40 @@ func _run_smoke_test() -> void:
 		push_error("SMOKE_FAILED: backup save recovery failed")
 		quit(1)
 		return
+
+	# Сохранение после восстановления не должно уничтожать рабочую резервную копию.
+	GameState.add_money(3)
+	if not SaveSystem.save_game(world):
+		push_error("SMOKE_FAILED: save after recovery failed")
+		quit(1)
+		return
+	corrupt_file = FileAccess.open(SaveSystem.PATH, FileAccess.WRITE)
+	if corrupt_file == null:
+		push_error("SMOKE_FAILED: cannot repeat save recovery test")
+		quit(1)
+		return
+	corrupt_file.store_string("{broken again")
+	corrupt_file.close()
+	if not SaveSystem.load_game() or GameState.money != original_money:
+		push_error("SMOKE_FAILED: good backup was lost after recovery save")
+		quit(1)
+		return
+
+	# Все предметы и объекты должны иметь пригодную текстуру (включая fallback).
+	for item_id in GameState.ITEMS.keys():
+		if GameState.item_icon(str(item_id)) == null:
+			push_error("SMOKE_FAILED: missing item icon: " + str(item_id))
+			quit(1)
+			return
+	for object_kind in WorldObject.DEFS.keys():
+		var probe = WorldObject.new()
+		probe.setup(str(object_kind), Vector2i.ZERO, null)
+		if probe.sprite == null or probe.sprite.texture == null:
+			push_error("SMOKE_FAILED: missing object texture: " + str(object_kind))
+			probe.free()
+			quit(1)
+			return
+		probe.free()
 
 	# Отрицательные значения не должны добавлять предметы или деньги.
 	var money_before_invalid_change: int = GameState.money
