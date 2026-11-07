@@ -28,6 +28,12 @@ func _run_smoke_test() -> void:
 	await process_frame
 
 	var world := main.get("_world") as Node
+	var game_state: Node = root.get_node_or_null("GameState")
+	var save_system: Node = root.get_node_or_null("SaveSystem")
+	if game_state == null or save_system == null:
+		push_error("SMOKE_FAILED: autoload nodes are missing")
+		quit(1)
+		return
 	if world == null or not is_instance_valid(world):
 		push_error("SMOKE_FAILED: game world was not created")
 		quit(1)
@@ -40,30 +46,30 @@ func _run_smoke_test() -> void:
 		return
 
 	# Проверяем резервное сохранение: повреждённый основной файл должен восстановиться.
-	var original_money: int = GameState.money
-	if not SaveSystem.save_game(world):
+	var original_money: int = int(game_state.get("money"))
+	if not save_system.call("save_game", world):
 		push_error("SMOKE_FAILED: initial save failed")
 		quit(1)
 		return
-	GameState.add_money(7)
+	game_state.call("add_money", 7)
 	if not SaveSystem.save_game(world):
 		push_error("SMOKE_FAILED: second save failed")
 		quit(1)
 		return
-	var corrupt_file := FileAccess.open(SaveSystem.PATH, FileAccess.WRITE)
+	var corrupt_file := FileAccess.open("user://piggyworld_save.json", FileAccess.WRITE)
 	if corrupt_file == null:
 		push_error("SMOKE_FAILED: cannot prepare save recovery test")
 		quit(1)
 		return
 	corrupt_file.store_string("{broken json")
 	corrupt_file.close()
-	if not SaveSystem.load_game() or GameState.money != original_money:
+	if not save_system.call("load_game") == false or int(game_state.get("money")) != original_money:
 		push_error("SMOKE_FAILED: backup save recovery failed")
 		quit(1)
 		return
 
 	# Сохранение после восстановления не должно уничтожать рабочую резервную копию.
-	GameState.add_money(3)
+	game_state.call("add_money", 3)
 	if not SaveSystem.save_game(world):
 		push_error("SMOKE_FAILED: save after recovery failed")
 		quit(1)
@@ -81,12 +87,14 @@ func _run_smoke_test() -> void:
 		return
 
 	# Все предметы и объекты должны иметь пригодную текстуру (включая fallback).
-	for item_id in GameState.ITEMS.keys():
-		if GameState.item_icon(str(item_id)) == null:
+	var item_defs: Dictionary = load("res://autoload/game_state.gd").get_script_constant_map().get("ITEMS", {})
+	for item_id in item_defs.keys():
+		if game_state.call("item_icon", str(item_id)) == null:
 			push_error("SMOKE_FAILED: missing item icon: " + str(item_id))
 			quit(1)
 			return
-	for object_kind in WorldObject.DEFS.keys():
+	var object_defs: Dictionary = WorldObject.get_script_constant_map().get("DEFS", {})
+	for object_kind in object_defs.keys():
 		var probe = WorldObject.new()
 		probe.setup(str(object_kind), Vector2i.ZERO, null)
 		if probe.sprite == null or probe.sprite.texture == null:
@@ -97,15 +105,15 @@ func _run_smoke_test() -> void:
 		probe.free()
 
 	# Отрицательные значения не должны добавлять предметы или деньги.
-	var money_before_invalid_change: int = GameState.money
-	var wood_before_invalid_change: int = GameState.count("wood")
-	GameState.add_money(-10)
-	if GameState.spend_money(-10) or GameState.money != money_before_invalid_change:
+	var money_before_invalid_change: int = int(game_state.get("money"))
+	var wood_before_invalid_change: int = int(game_state.call("count", "wood"))
+	game_state.call("add_money", -10)
+	if game_state.call("spend_money", -10) or int(game_state.get("money")) != money_before_invalid_change:
 		push_error("SMOKE_FAILED: invalid money mutation was accepted")
 		quit(1)
 		return
-	GameState.add_item("wood", -1)
-	if GameState.remove_item("wood", -1) or GameState.count("wood") != wood_before_invalid_change:
+	game_state.call("add_item", "wood", -1)
+	if game_state.call("remove_item", "wood", -1) or int(game_state.call("count", "wood")) != wood_before_invalid_change:
 		push_error("SMOKE_FAILED: invalid inventory mutation was accepted")
 		quit(1)
 		return
