@@ -977,6 +977,13 @@ func _build_room() -> void:
 	bg.centered = false
 	bg.position = o
 	bg.z_index = -10
+	match str(dungeon_data.get("biome_id", "moss_grotto")):
+		"crystal_depths":
+			bg.modulate = Color("#d9e8ff")
+		"ember_hollows":
+			bg.modulate = Color("#ffe0cc")
+		_:
+			bg.modulate = Color("#e2f0d8")
 	add_child(bg)
 	var walls := StaticBody2D.new()
 	add_child(walls)
@@ -1064,11 +1071,34 @@ func _build_cave_room() -> void:
 
 
 func _make_cave_texture() -> Texture2D:
+	# Real 16x16 pixel-art tiles from 0x72 DungeonTileset II (CC0).
+	# The generator still controls the layout; this function only renders it.
 	var img := Image.create(CAVE_W, CAVE_H, false, Image.FORMAT_RGBA8)
+	img.fill(Color("#17151c"))
+
+	var floor_images: Array[Image] = []
+	for i in range(1, 5):
+		var floor_texture := load("res://assets/dungeon/0x72/floor_%d.png" % i) as Texture2D
+		if floor_texture != null:
+			floor_images.append(floor_texture.get_image())
+
+	var wall_images: Dictionary = {}
+	for wall_name in ["mid", "top_mid", "top_left", "top_right"]:
+		var wall_texture := load("res://assets/dungeon/0x72/wall_%s.png" % wall_name) as Texture2D
+		if wall_texture != null:
+			wall_images[wall_name] = wall_texture.get_image()
+
+	var ladder_texture := load("res://assets/dungeon/0x72/floor_ladder.png") as Texture2D
+	var stairs_texture := load("res://assets/dungeon/0x72/floor_stairs.png") as Texture2D
+	var column_texture := load("res://assets/dungeon/0x72/column.png") as Texture2D
+	var crate_texture := load("res://assets/dungeon/0x72/crate.png") as Texture2D
+
+	if floor_images.is_empty() or not wall_images.has("mid"):
+		push_error("Dungeon tileset assets are missing; cave renderer cannot start")
+		return ImageTexture.create_from_image(img)
+
 	var grid: Array = dungeon_data["grid"]
 	var biome: Dictionary = dungeon_data["biome"]
-	var wall_color: Color = biome["wall"]
-	var floor_color: Color = biome["floor"]
 	var accent: Color = biome["accent"]
 	var r := RandomNumberGenerator.new()
 	r.seed = int(dungeon_data["seed"])
@@ -1076,61 +1106,81 @@ func _make_cave_texture() -> Texture2D:
 	for y in range(CAVE_MAP_H):
 		for x in range(CAVE_MAP_W):
 			var tile := int(grid[y][x])
-			var rect := Rect2i(x * TILE, y * TILE, TILE, TILE)
+			var destination := Vector2i(x * TILE, y * TILE)
 			if tile == DungeonGenerator.WALL:
-				img.fill_rect(rect, wall_color)
-				if r.randf() < 0.16:
-					img.fill_rect(Rect2i(rect.position.x + r.randi_range(2, 11), rect.position.y + r.randi_range(2, 11), 2, 2), wall_color.lightened(0.12))
-				if r.randf() < 0.035:
-					img.fill_rect(Rect2i(rect.position.x + 4, rect.position.y + 5, 3, 2), accent.darkened(0.12))
-			else:
-				var variation := r.randf_range(0.0, 0.08)
-				img.fill_rect(rect, floor_color.lightened(variation))
-				match tile:
-					DungeonGenerator.WATER:
-						img.fill_rect(Rect2i(rect.position.x + 2, rect.position.y + 6, 12, 4), Color("#527f9b"))
-						img.fill_rect(Rect2i(rect.position.x + 5, rect.position.y + 7, 5, 1), Color("#a4d9e5"))
-					DungeonGenerator.CRYSTAL:
-						img.fill_rect(Rect2i(rect.position.x + 6, rect.position.y + 2, 4, 12), accent)
-						img.fill_rect(Rect2i(rect.position.x + 4, rect.position.y + 6, 8, 4), accent.lightened(0.22))
-					DungeonGenerator.MUSHROOM:
-						img.fill_rect(Rect2i(rect.position.x + 7, rect.position.y + 6, 2, 6), Color("#d4c6a0"))
-						img.fill_rect(Rect2i(rect.position.x + 4, rect.position.y + 4, 8, 4), accent)
-					DungeonGenerator.ASH:
-						img.fill_rect(Rect2i(rect.position.x + 3, rect.position.y + 8, 10, 2), accent.darkened(0.2))
+				var below_walkable := y + 1 < CAVE_MAP_H and int(grid[y + 1][x]) != DungeonGenerator.WALL
+				var left_walkable := x > 0 and int(grid[y][x - 1]) != DungeonGenerator.WALL
+				var right_walkable := x + 1 < CAVE_MAP_W and int(grid[y][x + 1]) != DungeonGenerator.WALL
+				var wall_key := "mid"
+				if below_walkable and left_walkable:
+					wall_key = "top_left"
+				elif below_walkable and right_walkable:
+					wall_key = "top_right"
+				elif below_walkable:
+					wall_key = "top_mid"
+				var wall_image: Image = wall_images.get(wall_key, wall_images["mid"])
+				img.blit_rect(wall_image, Rect2i(0, 0, TILE, TILE), destination)
+				continue
 
-	# Room borders and center sigils make special rooms readable at a glance.
-	for room in dungeon_data["rooms"]:
-		var room_rect: Rect2i = room["rect"]
-		var room_type := str(room["type"])
-		var border_color := accent.darkened(0.12)
-		if room_type == "treasure":
-			border_color = Color("#e8c36e")
-		elif room_type == "puzzle":
-			border_color = accent.lightened(0.15)
-		elif room_type == "boss":
-			border_color = Color("#f09a72")
-		if room_type in ["treasure", "puzzle", "boss"]:
-			var px := room_rect.position.x * TILE
-			var py := room_rect.position.y * TILE
-			var pw := room_rect.size.x * TILE
-			var ph := room_rect.size.y * TILE
-			img.fill_rect(Rect2i(px, py, pw, 2), border_color)
-			img.fill_rect(Rect2i(px, py + ph - 2, pw, 2), border_color)
-			img.fill_rect(Rect2i(px, py, 2, ph), border_color)
-			img.fill_rect(Rect2i(px + pw - 2, py, 2, ph), border_color)
-		if room_type == "boss":
-			var boss_cell: Vector2i = room["center"]
-			var bx := boss_cell.x * TILE + 4
-			var by := boss_cell.y * TILE + 4
-			img.fill_rect(Rect2i(bx - 3, by - 3, 14, 14), border_color.darkened(0.35))
-			img.fill_rect(Rect2i(bx, by, 8, 8), border_color)
+			var floor_image: Image = floor_images[r.randi_range(0, floor_images.size() - 1)]
+			img.blit_rect(floor_image, Rect2i(0, 0, TILE, TILE), destination)
 
+			# Preserve the stone texture while tinting special floor features for each biome.
+			var tint := accent
+			var tint_strength := 0.0
+			match tile:
+				DungeonGenerator.WATER:
+					tint = Color("#78b5ca")
+					tint_strength = 0.28
+				DungeonGenerator.CRYSTAL:
+					tint = accent.lightened(0.16)
+					tint_strength = 0.32
+				DungeonGenerator.MUSHROOM:
+					tint = Color("#a77c9b")
+					tint_strength = 0.20
+				DungeonGenerator.ASH:
+					tint = Color("#c87957")
+					tint_strength = 0.25
+			if tint_strength > 0.0:
+				for py in range(TILE):
+					for px in range(TILE):
+						var pixel := img.get_pixel(destination.x + px, destination.y + py)
+						img.set_pixel(destination.x + px, destination.y + py, pixel.lerp(tint, tint_strength))
+
+	# Entrance and exit use actual tiles from the pack, not colored markers.
 	var start_cell: Vector2i = dungeon_data["start"]
 	var exit_cell: Vector2i = dungeon_data["exit"]
-	img.fill_rect(Rect2i(start_cell.x * TILE + 5, start_cell.y * TILE + 5, 6, 6), Color("#c7e7a5"))
-	img.fill_rect(Rect2i(exit_cell.x * TILE + 3, exit_cell.y * TILE + 3, 10, 10), Color("#f5dfa0"))
-	img.fill_rect(Rect2i(exit_cell.x * TILE + 6, exit_cell.y * TILE + 1, 4, 14), accent)
+	if ladder_texture != null:
+		img.blit_rect(ladder_texture.get_image(), Rect2i(0, 0, TILE, TILE), start_cell * TILE)
+	if stairs_texture != null:
+		img.blit_rect(stairs_texture.get_image(), Rect2i(0, 0, TILE, TILE), exit_cell * TILE)
+
+	# Add a couple of tall stone pillars to the guardian chamber and a crate to treasure rooms.
+	if column_texture != null:
+		var column_image := column_texture.get_image()
+		for room in dungeon_data["rooms"]:
+			if str(room["type"]) != "boss":
+				continue
+			var room_rect: Rect2i = room["rect"]
+			for cell in [
+				Vector2i(room_rect.position.x + 1, room_rect.position.y + 2),
+				Vector2i(room_rect.end.x - 2, room_rect.position.y + 2)
+			]:
+				var column_pos := Vector2i(cell.x * TILE, (cell.y + 1) * TILE - 48)
+				if column_pos.y >= 0 and column_pos.y + 48 <= CAVE_H:
+					img.blit_rect(column_image, Rect2i(0, 0, 16, 48), column_pos)
+
+	if crate_texture != null:
+		var crate_image := crate_texture.get_image()
+		for room in dungeon_data["rooms"]:
+			if str(room["type"]) != "treasure":
+				continue
+			var room_rect: Rect2i = room["rect"]
+			var crate_cell := Vector2i(room_rect.position.x + 1, room_rect.position.y + 1)
+			var crate_pos := Vector2i(crate_cell.x * TILE, crate_cell.y * TILE - 8)
+			if crate_pos.y >= 0 and crate_pos.y + 24 <= CAVE_H:
+				img.blit_rect(crate_image, Rect2i(0, 0, 16, 24), crate_pos)
+
 	return ImageTexture.create_from_image(img)
 
 func _make_room_texture() -> Texture2D:
