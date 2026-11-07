@@ -10,6 +10,7 @@ const Npc := preload("res://scripts/world/npc.gd")
 const Buildings := preload("res://scripts/world/buildings.gd")
 const Survival := preload("res://scripts/systems/survival.gd")
 const Critters := preload("res://scripts/fx/critters.gd")
+const SoilRules := preload("res://scripts/world/soil_rules.gd")
 
 const MAP_W := 176
 const MAP_H := 132
@@ -30,9 +31,10 @@ const LAKE_CENTER := Vector2(52, 52)
 
 ## per - сколько дней с поливом нужно на одну стадию роста (всего 3 стадии роста).
 const CROPS := {
-	"carrot": {"seed": "carrot_seed", "item": "carrot", "per": 1, "max": 2, "fx": Color("#f08a2c")},
-	"turnip": {"seed": "turnip_seed", "item": "turnip", "per": 1, "max": 2, "fx": Color("#9a5ab0")},
-	"pumpkin": {"seed": "pumpkin_seed", "item": "pumpkin", "per": 2, "max": 1, "fx": Color("#f08a2c")},
+	"carrot": {"seed": "carrot_seed", "item": "carrot", "per": 1, "max": 2, "stages": 3, "fx": Color("#f08a2c")},
+	"turnip": {"seed": "turnip_seed", "item": "turnip", "per": 1, "max": 2, "stages": 3, "fx": Color("#9a5ab0")},
+	"pumpkin": {"seed": "pumpkin_seed", "item": "pumpkin", "per": 2, "max": 1, "stages": 3, "fx": Color("#f08a2c")},
+	"potato": {"seed": "potato_seed", "item": "potato", "per": 2, "max": 3, "stages": 4, "fx": Color("#c49a64")},
 }
 
 const ANIMAL_SPOTS := [
@@ -67,6 +69,8 @@ var occupied: Dictionary = {}
 var river_cells: Dictionary = {}
 var bridge_cells: Dictionary = {}
 var soil: Dictionary = {}
+var soil_fertility: Dictionary = {}
+var soil_last_crop: Dictionary = {}
 var crops: Dictionary = {}
 var crop_nodes: Dictionary = {}
 var removed_uids: Dictionary = {}
@@ -494,6 +498,10 @@ func _restore_farm(saved: Dictionary) -> void:
 	for s in saved.get("soil", []):
 		var c := Vector2i(int(s["x"]), int(s["y"]))
 		soil[c] = bool(s["wet"])
+		soil_fertility[c] = clampi(int(s.get("fertility", 70)), 20, 100)
+		var previous_crop := str(s.get("last_crop", ""))
+		if CROPS.has(previous_crop):
+			soil_last_crop[c] = previous_crop
 		_paint_soil(c)
 	for cr in saved.get("crops", []):
 		var c := Vector2i(int(cr["x"]), int(cr["y"]))
@@ -501,7 +509,8 @@ func _restore_farm(saved: Dictionary) -> void:
 		if not CROPS.has(ctype):
 			ctype = "carrot"
 		var per: int = CROPS[ctype]["per"]
-		crops[c] = {"type": ctype, "stage": int(cr["stage"]), "age": int(cr.get("age", int(cr["stage"]) * per)), "watered": bool(cr["watered"])}
+		var max_stage := int(CROPS[ctype].get("stages", 3))
+		crops[c] = {"type": ctype, "stage": clampi(int(cr["stage"]), 0, max_stage), "age": maxi(0, int(cr.get("age", int(cr["stage"]) * per))), "watered": bool(cr["watered"])}
 		_update_crop_node(c)
 
 
@@ -510,7 +519,9 @@ func _paint_soil(c: Vector2i) -> void:
 
 
 func _update_crop_node(c: Vector2i) -> void:
-	var stage := int(crops[c]["stage"])
+	var crop_type := str(crops[c]["type"])
+	var max_stage := int(CROPS[crop_type].get("stages", 3))
+	var stage := clampi(int(crops[c]["stage"]), 0, max_stage)
 	var s: Sprite2D = crop_nodes.get(c)
 	if s == null:
 		s = Sprite2D.new()
@@ -518,7 +529,7 @@ func _update_crop_node(c: Vector2i) -> void:
 		s.position = Vector2(c.x * TILE, c.y * TILE)
 		ground_node.add_child(s)
 		crop_nodes[c] = s
-	s.texture = load("res://assets/objects/crop_%s_%d.png" % [crops[c]["type"], clampi(stage, 0, 3)])
+	s.texture = load("res://assets/objects/crop_%s_%d.png" % [crop_type, stage])
 
 
 func _object_near(p: Vector2, radius: float) -> WorldObject:
@@ -539,12 +550,25 @@ func harvest_at(target: Vector2) -> String:
 	if creature != null:
 		return creature.interact()
 	var cell := pos_to_cell(target)
-	if crops.has(cell) and int(crops[cell]["stage"]) >= 3:
-		var cdef: Dictionary = CROPS[crops[cell]["type"]]
-		var amount := 1 + rng.randi() % int(cdef["max"])
+	if crops.has(cell) and int(crops[cell]["stage"]) >= int(CROPS[str(crops[cell]["type"])].get("stages", 3)):
+		var crop_type := str(crops[cell]["type"])
+		var cdef: Dictionary = CROPS[crop_type]
+		var fertility := int(soil_fertility.get(cell, 70))
+		var max_yield := maxi(1, int(cdef["max"]) + SoilRules.yield_bonus(fertility))
+		var amount := 1 + rng.randi_range(0, max_yield - 1)
 		var item := str(cdef["item"])
 		GameState.add_item(item, amount)
 		EventBus.message.emit("+%d %s" % [amount, GameState.item_name(item)])
+		var previous_crop := str(soil_last_crop.get(cell, ""))
+		var new_fertility := SoilRules.after_harvest(fertility, previous_crop, crop_type)
+		soil_fertility[cell] = new_fertility
+		soil_last_crop[cell] = crop_type
+		var soil_message := "Плодородие грядки: %d%%" % new_fertility
+		if previous_crop == crop_type:
+			soil_message += " — повторная посадка истощает почву"
+		elif previous_crop != "":
+			soil_message += " — севооборот улучшил почву"
+		EventBus.message.emit(soil_message)
 		AudioManager.play("pickup")
 		Fx.burst(ground_node, cell_center(cell), cdef["fx"], 10, 50.0)
 		crop_nodes[cell].queue_free()
@@ -619,6 +643,8 @@ func use_tool(tool_id: String, target: Vector2) -> String:
 				AudioManager.play("error")
 				return "sad"
 			soil[cell] = false
+			if not soil_fertility.has(cell):
+				soil_fertility[cell] = 70
 			_paint_soil(cell)
 			AudioManager.play("plant")
 			Fx.burst(ground_node, cell_center(cell), Color("#8a5a3b"), 9, 45.0)
@@ -649,8 +675,10 @@ func _on_day_started(_day: int) -> void:
 			cr["watered"] = true
 		if cr["watered"] and not winter_stop:
 			cr["age"] = int(cr["age"]) + 1
-			var per: int = CROPS[cr["type"]]["per"]
-			cr["stage"] = mini(3, int(floor(float(cr["age"]) / per)))
+			var crop_def: Dictionary = CROPS[str(cr["type"])]
+			var per: int = int(crop_def["per"])
+			var max_stage: int = int(crop_def.get("stages", 3))
+			cr["stage"] = mini(max_stage, int(floor(float(cr["age"]) / per)))
 		cr["watered"] = raining
 		_update_crop_node(c)
 	for c in soil:
@@ -693,7 +721,7 @@ func serialize() -> Dictionary:
 			built[n.uid]["fuel"] = n.fuel
 	var soil_list: Array = []
 	for c in soil:
-		soil_list.append({"x": c.x, "y": c.y, "wet": soil[c]})
+		soil_list.append({"x": c.x, "y": c.y, "wet": soil[c], "fertility": int(soil_fertility.get(c, 70)), "last_crop": str(soil_last_crop.get(c, ""))})
 	var crop_list: Array = []
 	for c in crops:
 		crop_list.append({"x": c.x, "y": c.y, "type": crops[c]["type"], "age": crops[c]["age"], "stage": crops[c]["stage"], "watered": crops[c]["watered"]})

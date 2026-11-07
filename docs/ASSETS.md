@@ -29,3 +29,12 @@
 
 | assets/sprites/animals/wolf.png, assets/objects/campfire.png, иконки еды/копья/жилета/мази/гнили | tools/gen_hardcore.py |
 | howl, bite, hurt, eat | tools/gen_audio_hardcore.py |
+
+
+## Imported CC0 assets
+
+| Files | Original source | License |
+|---|---|---|
+| assets/objects/crop_potato_0.png ... crop_potato_4.png, assets/icons/potato_seed.png | josehzz, Farming crops 16x16 (included in Plant and Prosper repository) | CC0 |
+
+The Plant and Prosper project is GPL-3.0, but its README explicitly identifies these crop sprites and icons as CC0. Only those CC0 image files are included here; none of its GPL-licensed game code is copied.

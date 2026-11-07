@@ -1,6 +1,7 @@
 extends SceneTree
 
 const WorldObject := preload("res://scripts/world/world_object.gd")
+const SoilRules := preload("res://scripts/world/soil_rules.gd")
 ## CI: godot --headless --path . -s scripts/dev/smoke_test.gd
 
 func _initialize() -> void:
@@ -107,6 +108,20 @@ func _run_smoke_test() -> void:
 			quit(1)
 			return
 		probe.free()
+
+	# Verify crop rotation and fertility yield rules.
+	if SoilRules.after_harvest(70, "carrot", "carrot") != 52:
+		push_error("SMOKE_FAILED: same-crop soil penalty is incorrect")
+		quit(1)
+		return
+	if SoilRules.after_harvest(70, "carrot", "pumpkin") != 82:
+		push_error("SMOKE_FAILED: crop rotation bonus is incorrect")
+		quit(1)
+		return
+	if SoilRules.yield_bonus(90) != 1 or SoilRules.yield_bonus(25) != -1 or SoilRules.yield_bonus(60) != 0:
+		push_error("SMOKE_FAILED: soil fertility yield bonus is incorrect")
+		quit(1)
+		return
 
 	# Reject invalid negative inventory and currency changes.
 	var money_before: int = int(game_state.get("money"))

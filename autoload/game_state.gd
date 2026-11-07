@@ -1,7 +1,7 @@
 extends Node
 ## Деньги, инвентарь, выбранный инструмент, показатели выживания. Данные предметов — таблица ITEMS.
 
-const TOOLS: Array[String] = ["axe", "pickaxe", "hoe", "can", "carrot_seed", "turnip_seed", "pumpkin_seed"]
+const TOOLS: Array[String] = ["axe", "pickaxe", "hoe", "can", "carrot_seed", "turnip_seed", "pumpkin_seed", "potato_seed"]
 
 ## sell — цена продажи; buy — цена покупки; food — эффект еды; perish — доля свежести, теряемая за день (хардкор).
 const ITEMS := {
@@ -12,6 +12,7 @@ const ITEMS := {
 	"carrot_seed": {"name": "Семена моркови", "icon": "seeds", "buy": 6, "sell": 3},
 	"turnip_seed": {"name": "Семена репы", "icon": "seeds_turnip", "buy": 8, "sell": 4},
 	"pumpkin_seed": {"name": "Семена тыквы", "icon": "seeds_pumpkin", "buy": 20, "sell": 10},
+	"potato_seed": {"name": "Семена картофеля", "icon": "potato_seed", "buy": 14, "sell": 7},
 	"wood": {"name": "Дерево", "icon": "wood", "sell": 3},
 	"stone": {"name": "Камень", "icon": "stone", "sell": 4},
 	"berries": {"name": "Ягоды", "icon": "berries", "sell": 5, "food": {"hunger": 9, "health": 0, "sanity": 0}, "perish": 0.3},
@@ -19,6 +20,7 @@ const ITEMS := {
 	"carrot": {"name": "Морковь", "icon": "carrot", "sell": 12, "food": {"hunger": 13, "health": 1, "sanity": 0}, "perish": 0.12},
 	"turnip": {"name": "Репа", "icon": "turnip", "sell": 18, "food": {"hunger": 13, "health": 1, "sanity": 0}, "perish": 0.1},
 	"pumpkin": {"name": "Тыква", "icon": "pumpkin", "sell": 45, "food": {"hunger": 28, "health": 2, "sanity": 0}, "perish": 0.07},
+	"potato": {"name": "Картофель", "icon": "potato", "sell": 22, "food": {"hunger": 20, "health": 1, "sanity": 0}, "perish": 0.12},
 	"egg": {"name": "Яйцо", "icon": "egg", "sell": 10, "food": {"hunger": 6, "health": 0, "sanity": -2}, "perish": 0.2},
 	"milk": {"name": "Молоко", "icon": "milk", "sell": 18, "food": {"hunger": 11, "health": 2, "sanity": 3}, "perish": 0.35},
 	"wool": {"name": "Шерсть", "icon": "wool", "sell": 15},
@@ -32,7 +34,7 @@ const ITEMS := {
 	"spear": {"name": "Копьё", "icon": "spear"},
 }
 
-const SHOP_STOCK: Array[String] = ["carrot_seed", "turnip_seed", "pumpkin_seed"]
+const SHOP_STOCK: Array[String] = ["carrot_seed", "turnip_seed", "pumpkin_seed", "potato_seed"]
 
 const START_MONEY := 50
 const MAX_STAT := 100.0
@@ -237,7 +239,14 @@ func item_name(id: String) -> String:
 func item_icon(id: String) -> Texture2D:
 	var icon_name: String = str(ITEMS.get(id, {}).get("icon", id))
 	if not _icon_cache.has(icon_name):
-		_icon_cache[icon_name] = load("res://assets/icons/%s.png" % icon_name)
+		var png_path := "res://assets/icons/%s.png" % icon_name
+		var svg_path := "res://assets/icons/%s.svg" % icon_name
+		if ResourceLoader.exists(png_path):
+			_icon_cache[icon_name] = load(png_path)
+		elif ResourceLoader.exists(svg_path):
+			_icon_cache[icon_name] = load(svg_path)
+		else:
+			_icon_cache[icon_name] = null
 	return _icon_cache[icon_name]
 
 
