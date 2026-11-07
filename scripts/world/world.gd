@@ -11,6 +11,7 @@ const Buildings := preload("res://scripts/world/buildings.gd")
 const Survival := preload("res://scripts/systems/survival.gd")
 const Critters := preload("res://scripts/fx/critters.gd")
 const SoilRules := preload("res://scripts/world/soil_rules.gd")
+const DungeonGenerator := preload("res://scripts/systems/dungeon_generator.gd")
 
 const MAP_W := 176
 const MAP_H := 132
@@ -48,6 +49,10 @@ const ROOM_ORIGIN := Vector2(4096, 0)
 const CAVE_ROOM_ORIGIN := Vector2(4096, 320)
 const ROOM_W := 288
 const ROOM_H := 176
+const CAVE_MAP_W := DungeonGenerator.DEFAULT_WIDTH
+const CAVE_MAP_H := DungeonGenerator.DEFAULT_HEIGHT
+const CAVE_W := CAVE_MAP_W * TILE
+const CAVE_H := CAVE_MAP_H * TILE
 const HOUSE_DOOR_OUT := Vector2(648, 590)
 
 const SEASON_GROUND := [
@@ -79,6 +84,7 @@ var built: Dictionary = {}
 var indoors: bool = false
 var in_cave: bool = false
 var cave_looted: bool = false
+var dungeon_data: Dictionary = {}
 var survival: Survival
 var nav: AStarGrid2D
 var _transitioning: bool = false
@@ -159,7 +165,7 @@ func _process(delta: float) -> void:
 	_update_ghost()
 	if indoors:
 		AudioManager.set_ambient("")
-		if not _transitioning and player.position.y > _room_origin().y + ROOM_H - 6.0:
+		if not _transitioning and player.position.y > _room_origin().y + _room_size().y - 6.0:
 			if in_cave:
 				exit_cave()
 			else:
@@ -998,11 +1004,13 @@ func _build_room() -> void:
 
 
 func _build_cave_room() -> void:
+	if dungeon_data.is_empty():
+		dungeon_data = DungeonGenerator.new().generate_floor(1, world_seed)
 	var o := CAVE_ROOM_ORIGIN
 	var filler := ColorRect.new()
-	filler.color = Color("#0a080d")
-	filler.position = o + Vector2(-900, -700)
-	filler.size = Vector2(2100, 1600)
+	filler.color = Color("#08090e")
+	filler.position = o + Vector2(-80, -80)
+	filler.size = Vector2(CAVE_W + 160, CAVE_H + 160)
 	filler.z_index = -20
 	add_child(filler)
 	var bg := Sprite2D.new()
@@ -1011,62 +1019,118 @@ func _build_cave_room() -> void:
 	bg.position = o
 	bg.z_index = -10
 	add_child(bg)
+
 	var walls := StaticBody2D.new()
+	walls.name = "CaveBoundary"
 	add_child(walls)
+	var gap := 64.0
 	var rects := [
-		Rect2(o.x - 40, o.y - 40, ROOM_W + 80, 96),
-		Rect2(o.x - 40, o.y, 50, ROOM_H + 40),
-		Rect2(o.x + ROOM_W - 10, o.y, 50, ROOM_H + 40),
-		Rect2(o.x - 40, o.y + ROOM_H, 168, 40),
-		Rect2(o.x + 160, o.y + ROOM_H, ROOM_W - 160 + 40, 40),
+		Rect2(o.x - 40, o.y - 40, CAVE_W + 80, 96),
+		Rect2(o.x - 40, o.y, 50, CAVE_H + 40),
+		Rect2(o.x + CAVE_W - 10, o.y, 50, CAVE_H + 40),
+		Rect2(o.x - 40, o.y + CAVE_H, CAVE_W / 2.0 - gap / 2.0 + 40, 40),
+		Rect2(o.x + CAVE_W / 2.0 + gap / 2.0, o.y + CAVE_H, CAVE_W / 2.0 - gap / 2.0 + 40, 40),
 	]
-	for r in rects:
+	for wall_rect in rects:
 		var cs := CollisionShape2D.new()
-		var sh := RectangleShape2D.new()
-		sh.size = r.size
-		cs.shape = sh
-		cs.position = r.position + r.size / 2.0
+		var shape := RectangleShape2D.new()
+		shape.size = wall_rect.size
+		cs.shape = shape
+		cs.position = wall_rect.position + wall_rect.size / 2.0
 		walls.add_child(cs)
-	# камни для добычи и старый сундук
-	var spots := [Vector2(60, 60), Vector2(104, 96), Vector2(150, 62), Vector2(196, 104), Vector2(238, 66), Vector2(84, 132)]
-	for i in range(spots.size()):
-		var kind := "rock_big" if i % 2 == 0 else "rock_small"
-		_spawn(kind, Vector2i.ZERO, "cave_rock_%d" % i, o + spots[i])
-	_spawn("chest", Vector2i.ZERO, "cave_chest", o + Vector2(144, 118))
+
+	# A few mineable deposits are placed in generated rooms, never on the main route markers.
+	var rooms: Array = dungeon_data["rooms"]
+	var rock_index := 0
+	for room in rooms:
+		if str(room["type"]) != "normal":
+			continue
+		var room_rect: Rect2i = room["rect"]
+		var center: Vector2i = room["center"]
+		var rock_cell := center + Vector2i(2, 1)
+		if room_rect.has_point(rock_cell) and rock_index < 6:
+			var rock_kind := "rock_big" if rock_index % 2 == 0 else "rock_small"
+			var feet := o + Vector2(rock_cell.x * TILE + TILE / 2.0, rock_cell.y * TILE + TILE - 1)
+			_spawn(rock_kind, rock_cell, "cave_rock_%d_%d" % [int(dungeon_data["seed"]), rock_index], feet)
+			rock_index += 1
+
+	if not cave_looted:
+		for room in rooms:
+			if str(room["type"]) == "treasure":
+				var chest_cell: Vector2i = room["center"]
+				var chest_feet := o + Vector2(chest_cell.x * TILE + TILE / 2.0, chest_cell.y * TILE + TILE - 1)
+				_spawn("chest", chest_cell, "cave_chest", chest_feet)
+				break
 
 
 func _make_cave_texture() -> Texture2D:
-	var img := Image.create(ROOM_W, ROOM_H, false, Image.FORMAT_RGBA8)
-	img.fill(Color("#2a2430"))
+	var img := Image.create(CAVE_W, CAVE_H, false, Image.FORMAT_RGBA8)
+	var grid: Array = dungeon_data["grid"]
+	var biome: Dictionary = dungeon_data["biome"]
+	var wall_color: Color = biome["wall"]
+	var floor_color: Color = biome["floor"]
+	var accent: Color = biome["accent"]
 	var r := RandomNumberGenerator.new()
-	r.seed = 4242
-	for y in range(ROOM_H):
-		for x in range(ROOM_W):
-			if r.randf() < 0.05:
-				img.set_pixel(x, y, Color("#221d28"))
-			elif r.randf() < 0.03:
-				img.set_pixel(x, y, Color("#332c3a"))
-	# трещины
-	for i in range(14):
-		var x := r.randi_range(8, ROOM_W - 8)
-		var y := r.randi_range(8, ROOM_H - 8)
-		var dx := r.randi_range(-1, 1)
-		for k in range(r.randi_range(6, 22)):
-			x = clampi(x + dx, 2, ROOM_W - 3)
-			y = clampi(y + 1, 2, ROOM_H - 3)
-			img.set_pixel(x, y, Color("#1b1620"))
-	# светящиеся кристаллы
-	for i in range(12):
-		var x := r.randi_range(10, ROOM_W - 10)
-		var y := r.randi_range(10, ROOM_H - 10)
-		img.set_pixel(x, y, Color("#6fd6c8"))
-		img.set_pixel(x + 1, y, Color("#3f9a92"))
-	# стены-порода по краям
-	img.fill_rect(Rect2i(0, 0, ROOM_W, 26), Color("#1c1822"))
-	img.fill_rect(Rect2i(0, ROOM_H - 20, ROOM_W, 20), Color("#1c1822"))
-	for x in range(0, ROOM_W, 18):
-		var h := r.randi_range(18, 40)
-		img.fill_rect(Rect2i(x, 0, 12, h), Color("#241f2b"))
+	r.seed = int(dungeon_data["seed"])
+
+	for y in range(CAVE_MAP_H):
+		for x in range(CAVE_MAP_W):
+			var tile := int(grid[y][x])
+			var rect := Rect2i(x * TILE, y * TILE, TILE, TILE)
+			if tile == DungeonGenerator.WALL:
+				img.fill_rect(rect, wall_color)
+				if r.randf() < 0.16:
+					img.fill_rect(Rect2i(rect.position.x + r.randi_range(2, 11), rect.position.y + r.randi_range(2, 11), 2, 2), wall_color.lightened(0.12))
+				if r.randf() < 0.035:
+					img.fill_rect(Rect2i(rect.position.x + 4, rect.position.y + 5, 3, 2), accent.darkened(0.12))
+			else:
+				var variation := r.randf_range(-0.06, 0.06)
+				img.fill_rect(rect, floor_color.lightened(variation))
+				match tile:
+					DungeonGenerator.WATER:
+						img.fill_rect(Rect2i(rect.position.x + 2, rect.position.y + 6, 12, 4), Color("#527f9b"))
+						img.fill_rect(Rect2i(rect.position.x + 5, rect.position.y + 7, 5, 1), Color("#a4d9e5"))
+					DungeonGenerator.CRYSTAL:
+						img.fill_rect(Rect2i(rect.position.x + 6, rect.position.y + 2, 4, 12), accent)
+						img.fill_rect(Rect2i(rect.position.x + 4, rect.position.y + 6, 8, 4), accent.lightened(0.22))
+					DungeonGenerator.MUSHROOM:
+						img.fill_rect(Rect2i(rect.position.x + 7, rect.position.y + 6, 2, 6), Color("#d4c6a0"))
+						img.fill_rect(Rect2i(rect.position.x + 4, rect.position.y + 4, 8, 4), accent)
+					DungeonGenerator.ASH:
+						img.fill_rect(Rect2i(rect.position.x + 3, rect.position.y + 8, 10, 2), accent.darkened(0.2))
+
+	# Room borders and center sigils make special rooms readable at a glance.
+	for room in dungeon_data["rooms"]:
+		var room_rect: Rect2i = room["rect"]
+		var room_type := str(room["type"])
+		var border_color := accent.darkened(0.12)
+		if room_type == "treasure":
+			border_color = Color("#e8c36e")
+		elif room_type == "puzzle":
+			border_color = accent.lightened(0.15)
+		elif room_type == "boss":
+			border_color = Color("#f09a72")
+		if room_type in ["treasure", "puzzle", "boss"]:
+			var px := room_rect.position.x * TILE
+			var py := room_rect.position.y * TILE
+			var pw := room_rect.size.x * TILE
+			var ph := room_rect.size.y * TILE
+			img.fill_rect(Rect2i(px, py, pw, 2), border_color)
+			img.fill_rect(Rect2i(px, py + ph - 2, pw, 2), border_color)
+			img.fill_rect(Rect2i(px, py, 2, ph), border_color)
+			img.fill_rect(Rect2i(px + pw - 2, py, 2, ph), border_color)
+		if room_type == "boss":
+			var boss_cell: Vector2i = room["center"]
+			var bx := boss_cell.x * TILE + 4
+			var by := boss_cell.y * TILE + 4
+			img.fill_rect(Rect2i(bx - 3, by - 3, 14, 14), border_color.darkened(0.35))
+			img.fill_rect(Rect2i(bx, by, 8, 8), border_color)
+
+	var start_cell: Vector2i = dungeon_data["start"]
+	var exit_cell: Vector2i = dungeon_data["exit"]
+	img.fill_rect(Rect2i(start_cell.x * TILE + 5, start_cell.y * TILE + 5, 6, 6), Color("#c7e7a5"))
+	img.fill_rect(Rect2i(exit_cell.x * TILE + 3, exit_cell.y * TILE + 3, 10, 10), Color("#f5dfa0"))
+	img.fill_rect(Rect2i(exit_cell.x * TILE + 6, exit_cell.y * TILE + 1, 4, 14), accent)
 	return ImageTexture.create_from_image(img)
 
 func _make_room_texture() -> Texture2D:
@@ -1092,13 +1156,17 @@ func _room_origin() -> Vector2:
 	return CAVE_ROOM_ORIGIN if in_cave else ROOM_ORIGIN
 
 
+func _room_size() -> Vector2:
+	return Vector2(CAVE_W, CAVE_H) if in_cave else Vector2(ROOM_W, ROOM_H)
+
+
 func _apply_camera_limits() -> void:
 	var cam: Camera2D = player.camera
 	if indoors:
-		# Внутри дома камера приближена: комната целиком влезает в кадр.
-		cam.zoom = Vector2(2, 2)
+		# The house stays close-up; the larger cave uses a wider view.
+		cam.zoom = Vector2(1.5, 1.5) if in_cave else Vector2(2, 2)
 		var vs := get_viewport().get_visible_rect().size / cam.zoom
-		var c := _room_origin() + Vector2(ROOM_W, ROOM_H) / 2.0
+		var c := _room_origin() + _room_size() / 2.0
 		# Границы ровно по кадру: маленькая комната жёстко центрируется,
 		# иначе Godot сдвигает кадр к краю вырожденных лимитов.
 		cam.limit_left = int(c.x - vs.x / 2.0)
@@ -1163,7 +1231,8 @@ func _do_enter_cave() -> void:
 	in_cave = true
 	_transitioning = false
 	player.velocity = Vector2.ZERO
-	player.position = CAVE_ROOM_ORIGIN + Vector2(ROOM_W / 2.0, ROOM_H - 14.0)
+	var start_cell: Vector2i = dungeon_data.get("start", Vector2i(3, 3))
+	player.position = CAVE_ROOM_ORIGIN + Vector2(start_cell.x * TILE + TILE / 2.0, start_cell.y * TILE + TILE / 2.0)
 	player.facing = Vector2.UP
 	weather_fx.visible = false
 	_apply_camera_limits()
