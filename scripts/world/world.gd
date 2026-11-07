@@ -411,7 +411,7 @@ func _place_landmarks() -> void:
 
 func _scatter_objects() -> void:
 	var forest := FastNoiseLite.new()
-	forest.seed = SEED + 1
+	forest.seed = world_seed + 1
 	forest.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	forest.frequency = 0.07
 	var flower_kinds := ["flower_red", "flower_yellow", "flower_blue", "flower_white"]
