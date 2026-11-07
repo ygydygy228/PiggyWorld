@@ -1025,7 +1025,7 @@ func _build_cave_room() -> void:
 	add_child(walls)
 	var gap := 64.0
 	var rects := [
-		Rect2(o.x - 40, o.y - 40, CAVE_W + 80, 96),
+		Rect2(o.x - 40, o.y - 40, CAVE_W + 80, 40),
 		Rect2(o.x - 40, o.y, 50, CAVE_H + 40),
 		Rect2(o.x + CAVE_W - 10, o.y, 50, CAVE_H + 40),
 		Rect2(o.x - 40, o.y + CAVE_H, CAVE_W / 2.0 - gap / 2.0 + 40, 40),
@@ -1084,7 +1084,7 @@ func _make_cave_texture() -> Texture2D:
 				if r.randf() < 0.035:
 					img.fill_rect(Rect2i(rect.position.x + 4, rect.position.y + 5, 3, 2), accent.darkened(0.12))
 			else:
-				var variation := r.randf_range(-0.06, 0.06)
+				var variation := r.randf_range(0.0, 0.08)
 				img.fill_rect(rect, floor_color.lightened(variation))
 				match tile:
 					DungeonGenerator.WATER:
