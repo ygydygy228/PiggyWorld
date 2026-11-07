@@ -86,6 +86,7 @@ var in_cave: bool = false
 var cave_looted: bool = false
 var cave_shade: CanvasModulate
 var player_light: PointLight2D
+var _light_texture: GradientTexture2D
 var dungeon_data: Dictionary = {}
 var survival: Survival
 var nav: AStarGrid2D
@@ -1094,12 +1095,33 @@ func _setup_cave_lighting() -> void:
 	tex.fill_to = Vector2(1.0, 0.5)
 	tex.width = 128
 	tex.height = 128
+	_light_texture = tex
+
+
+
+## Свет вокруг свинки создаём только на входе в пещеру и убираем на выходе,
+## иначе он висит вне дерева и оставляет утечки при выходе из игры.
+func _attach_player_light() -> void:
+	if player_light != null and is_instance_valid(player_light):
+		return
 	player_light = PointLight2D.new()
-	player_light.texture = tex
+	player_light.texture = _light_texture
 	player_light.energy = 0.75
 	player_light.texture_scale = 3.6
 	player_light.color = Color(1.0, 0.84, 0.62)
-	player_light.enabled = false
+	player_light.position = Vector2(0, -10)
+	player.add_child(player_light)
+
+
+func _detach_player_light() -> void:
+	if player_light == null or not is_instance_valid(player_light):
+		player_light = null
+		return
+	if player_light.get_parent() != null:
+		player_light.get_parent().remove_child(player_light)
+	player_light.texture = null
+	player_light.queue_free()
+	player_light = null
 
 func _make_cave_texture() -> Texture2D:
 	# Real 16x16 pixel-art tiles from 0x72 DungeonTileset II (CC0).
@@ -1382,12 +1404,7 @@ func _do_enter_cave() -> void:
 	_apply_camera_limits()
 	if cave_shade != null:
 		cave_shade.color = Color(0.42, 0.44, 0.58)
-	if player_light != null and is_instance_valid(player):
-		if player_light.get_parent() != null:
-			player_light.get_parent().remove_child(player_light)
-		player.add_child(player_light)
-		player_light.position = Vector2(0, -10)
-		player_light.enabled = true
+	_attach_player_light()
 	EventBus.message.emit("Пещера: сыро и тихо. Где-то капает вода.")
 
 
@@ -1409,8 +1426,7 @@ func _do_exit_cave() -> void:
 	weather_fx.visible = true
 	if cave_shade != null:
 		cave_shade.color = Color.WHITE
-	if player_light != null:
-		player_light.enabled = false
+	_detach_player_light()
 	_apply_camera_limits()
 
 
