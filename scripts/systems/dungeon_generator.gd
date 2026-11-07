@@ -139,6 +139,21 @@ func generate_floor(depth: int, seed_value: int, width: int = DEFAULT_WIDTH, hei
 	_decorate(grid, rooms, biome_id, rng)
 
 	var start_cell: Vector2i = room_data[0]["center"]
+	var start_rect: Rect2i = rooms[0]
+	# Три печати в стартовой комнате: порядок активации задаёт rng и подсказка на стене.
+	var seal_offsets := [Vector2i(-2, 0), Vector2i(0, -2), Vector2i(2, 0)]
+	var seals: Array = []
+	for off in seal_offsets:
+		var cell: Vector2i = start_cell + off
+		cell.x = clampi(cell.x, start_rect.position.x + 1, start_rect.end.x - 2)
+		cell.y = clampi(cell.y, start_rect.position.y + 1, start_rect.end.y - 2)
+		seals.append(cell)
+	var seal_order := [0, 1, 2]
+	for i in range(seal_order.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = seal_order[i]
+		seal_order[i] = seal_order[j]
+		seal_order[j] = tmp
 	var final_room: Dictionary = room_data[room_data.size() - 1]
 	var final_center: Vector2i = final_room["center"]
 
@@ -162,6 +177,8 @@ func generate_floor(depth: int, seed_value: int, width: int = DEFAULT_WIDTH, hei
 		"grid": grid,
 		"rooms": room_data,
 		"start": start_cell,
+		"seals": seals,
+		"seal_order": seal_order,
 		"exit": exit_cell,
 		"boss_floor": boss_floor,
 		"boss": boss,

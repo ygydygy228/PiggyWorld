@@ -12,6 +12,7 @@ const Survival := preload("res://scripts/systems/survival.gd")
 const Critters := preload("res://scripts/fx/critters.gd")
 const SoilRules := preload("res://scripts/world/soil_rules.gd")
 const DungeonGenerator := preload("res://scripts/systems/dungeon_generator.gd")
+const DungeonRenderer := preload("res://scripts/systems/dungeon_renderer.gd")
 
 const MAP_W := 176
 const MAP_H := 132
@@ -88,6 +89,13 @@ var cave_shade: CanvasModulate
 var player_light: PointLight2D
 var _light_texture: GradientTexture2D
 var dungeon_data: Dictionary = {}
+var cave_depth: int = 1
+var lit_seals: Array = []
+var cave_solved: bool = false
+var cave_root: Node2D
+var cave_bg: Sprite2D
+var _exit_hint_t: float = 0.0
+var _cave_grace: float = 0.0
 var survival: Survival
 var nav: AStarGrid2D
 var _transitioning: bool = false
@@ -170,11 +178,23 @@ func _process(delta: float) -> void:
 	if indoors:
 		AudioManager.set_ambient("")
 		if in_cave:
-			if not _transitioning:
+			_cave_grace = maxf(0.0, _cave_grace - delta)
+			if not _transitioning and _cave_grace <= 0.0:
 				var exit_cell: Vector2i = dungeon_data.get("exit", Vector2i(-1, -1))
-				var exit_pos := CAVE_ROOM_ORIGIN + Vector2(exit_cell.x * TILE + TILE / 2.0, exit_cell.y * TILE + TILE / 2.0)
-				if exit_cell.x >= 0 and player.position.distance_to(exit_pos) < 13.0:
+				if exit_cell.x >= 0 and player.position.distance_to(_cave_cell_pos(exit_cell)) < 13.0:
+					if not cave_solved:
+						if _exit_hint_t <= 0.0:
+							_exit_hint_t = 3.0
+							EventBus.message.emit("Лестница заперта: сначала печати")
+							AudioManager.play("error", 0.0, 0.6)
+					elif cave_depth < 12:
+						descend_cave()
+					else:
+						exit_cave()
+				var start_cell: Vector2i = dungeon_data.get("start", Vector2i(-1, -1))
+				if cave_depth <= 1 and start_cell.x >= 0 and player.position.distance_to(_cave_cell_pos(start_cell)) < 12.0:
 					exit_cave()
+			_exit_hint_t = maxf(0.0, _exit_hint_t - delta)
 		elif not _transitioning and player.position.y > _room_origin().y + _room_size().y - 6.0:
 			exit_house()
 	else:
@@ -599,6 +619,11 @@ func harvest_at(target: Vector2) -> String:
 	if o != null and o.interaction() == "cave":
 		enter_cave()
 		return "talk"
+	if in_cave and not cave_solved:
+		var seal := _cave_seal_near(target)
+		if seal >= 0:
+			_touch_seal(seal)
+			return "talk"
 	if o != null and o.interaction() == "chest":
 		if not cave_looted:
 			cave_looted = true
@@ -1019,24 +1044,29 @@ func _build_room() -> void:
 
 func _build_cave_room() -> void:
 	if dungeon_data.is_empty():
-		dungeon_data = DungeonGenerator.new().generate_floor(1, world_seed)
+		dungeon_data = DungeonGenerator.new().generate_floor(cave_depth, world_seed)
+	if cave_root == null:
+		cave_root = Node2D.new()
+		cave_root.name = "CaveRoom"
+		add_child(cave_root)
 	var o := CAVE_ROOM_ORIGIN
 	var filler := ColorRect.new()
 	filler.color = Color("#08090e")
 	filler.position = o + Vector2(-80, -80)
 	filler.size = Vector2(CAVE_W + 160, CAVE_H + 160)
 	filler.z_index = -20
-	add_child(filler)
+	cave_root.add_child(filler)
 	var bg := Sprite2D.new()
 	bg.texture = _make_cave_texture()
 	bg.centered = false
 	bg.position = o
 	bg.z_index = -10
-	add_child(bg)
+	cave_root.add_child(bg)
+	cave_bg = bg
 
 	var walls := StaticBody2D.new()
 	walls.name = "CaveBoundary"
-	add_child(walls)
+	cave_root.add_child(walls)
 	var gap := 64.0
 	var rects := [
 		Rect2(o.x - 40, o.y - 40, CAVE_W + 80, 40),
@@ -1101,6 +1131,83 @@ func _setup_cave_lighting() -> void:
 
 ## Свет вокруг свинки создаём только на входе в пещеру и убираем на выходе,
 ## иначе он висит вне дерева и оставляет утечки при выходе из игры.
+
+
+## Полная пересборка этажа: генератор -> текстура -> объекты.
+func _load_cave_floor(depth: int) -> void:
+	cave_depth = clampi(depth, 1, 12)
+	dungeon_data = DungeonGenerator.new().generate_floor(cave_depth, world_seed)
+	lit_seals.clear()
+	cave_solved = false
+	if cave_root != null:
+		for c in cave_root.get_children():
+			c.queue_free()
+		cave_bg = null
+	for n in objects_node.get_children():
+		var uid := str(n.get("uid")) if n.get("uid") != null else ""
+		if uid.begins_with("cave_"):
+			n.queue_free()
+	_build_cave_room()
+
+
+## Перерисовать текстуру этажа (после активации печати).
+func _refresh_cave_texture() -> void:
+	if cave_bg != null and is_instance_valid(cave_bg):
+		cave_bg.texture = _make_cave_texture()
+
+
+func _cave_cell_pos(cell: Vector2i) -> Vector2:
+	return CAVE_ROOM_ORIGIN + Vector2(cell.x * TILE + TILE / 2.0, cell.y * TILE + TILE / 2.0)
+
+
+## Игрок трогает печать: нужен порядок, который показан точками на стене.
+func _touch_seal(index: int) -> void:
+	var order: Array = dungeon_data.get("seal_order", [])
+	if cave_solved or order.is_empty():
+		return
+	if lit_seals.size() < order.size() and int(order[lit_seals.size()]) == index:
+		lit_seals.append(index)
+		AudioManager.play("pickup", 0.05, 0.8)
+		EventBus.message.emit("Печать вспыхнула (%d/%d)" % [lit_seals.size(), order.size()])
+		if lit_seals.size() == order.size():
+			cave_solved = true
+			GameState.add_money(40)
+			GameState.add_item("stone", 2)
+			AudioManager.play("build", 0.05, 0.9)
+			EventBus.message.emit("Печати сошлись! Лестница вниз открыта, +40 монет")
+		_refresh_cave_texture()
+	else:
+		lit_seals.clear()
+		AudioManager.play("error")
+		EventBus.message.emit("Порядок неверный - печати гаснут")
+		_refresh_cave_texture()
+
+
+func _cave_seal_near(point: Vector2) -> int:
+	var seals: Array = dungeon_data.get("seals", [])
+	for i in range(seals.size()):
+		if _cave_cell_pos(seals[i]).distance_to(point) < 15.0:
+			return i
+	return -1
+
+
+func descend_cave() -> void:
+	if _transitioning or not in_cave:
+		return
+	_transition("_do_descend_cave")
+
+
+func _do_descend_cave() -> void:
+	_transitioning = false
+	_load_cave_floor(cave_depth + 1)
+	player.velocity = Vector2.ZERO
+	var start_cell: Vector2i = dungeon_data["start"]
+	player.position = _cave_cell_pos(start_cell)
+	_cave_grace = 1.2
+	_apply_camera_limits()
+	EventBus.message.emit("Этаж %d: %s" % [cave_depth, str(dungeon_data["biome"]["name"])])
+
+
 func _attach_player_light() -> void:
 	if player_light != null and is_instance_valid(player_light):
 		return
@@ -1124,117 +1231,7 @@ func _detach_player_light() -> void:
 	player_light = null
 
 func _make_cave_texture() -> Texture2D:
-	# Real 16x16 pixel-art tiles from 0x72 DungeonTileset II (CC0).
-	# The generator still controls the layout; this function only renders it.
-	var img := Image.create(CAVE_W, CAVE_H, false, Image.FORMAT_RGBA8)
-	img.fill(Color("#17151c"))
-
-	var floor_images: Array[Image] = []
-	for i in range(1, 5):
-		var floor_texture := load("res://assets/dungeon/0x72/floor_%d.png" % i) as Texture2D
-		if floor_texture != null:
-			floor_images.append(_texture_image_rgba(floor_texture))
-
-	var wall_images: Dictionary = {}
-	for wall_name in ["mid", "top_mid", "top_left", "top_right"]:
-		var wall_texture := load("res://assets/dungeon/0x72/wall_%s.png" % wall_name) as Texture2D
-		if wall_texture != null:
-			wall_images[wall_name] = _texture_image_rgba(wall_texture)
-
-	var ladder_texture := load("res://assets/dungeon/0x72/floor_ladder.png") as Texture2D
-	var stairs_texture := load("res://assets/dungeon/0x72/floor_stairs.png") as Texture2D
-	var column_texture := load("res://assets/dungeon/0x72/column.png") as Texture2D
-	var crate_texture := load("res://assets/dungeon/0x72/crate.png") as Texture2D
-
-	if floor_images.is_empty() or not wall_images.has("mid"):
-		push_error("Dungeon tileset assets are missing; cave renderer cannot start")
-		return ImageTexture.create_from_image(img)
-
-	var grid: Array = dungeon_data["grid"]
-	var biome: Dictionary = dungeon_data["biome"]
-	var accent: Color = biome["accent"]
-	var r := RandomNumberGenerator.new()
-	r.seed = int(dungeon_data["seed"])
-
-	var wall_tint: Color = biome["wall"]
-	var floor_tint: Color = biome["floor"]
-	for y in range(CAVE_MAP_H):
-		for x in range(CAVE_MAP_W):
-			var tile := int(grid[y][x])
-			var destination := Vector2i(x * TILE, y * TILE)
-			if tile == DungeonGenerator.WALL:
-				# Тело стены + светлая кромка там, где стена смотрит на пол.
-				img.blit_rect(wall_images["mid"], Rect2i(0, 0, TILE, TILE), destination)
-				_tint_rect(img, destination, TILE, TILE, Color(0, 0, 0), 0.14)
-				_tint_rect(img, destination, TILE, TILE, wall_tint, 0.50)
-				var below_walkable := y + 1 < CAVE_MAP_H and int(grid[y + 1][x]) != DungeonGenerator.WALL
-				if below_walkable:
-					var left_walkable := x > 0 and int(grid[y][x - 1]) != DungeonGenerator.WALL
-					var right_walkable := x + 1 < CAVE_MAP_W and int(grid[y][x + 1]) != DungeonGenerator.WALL
-					var cap_key := "top_mid"
-					if left_walkable:
-						cap_key = "top_left"
-					elif right_walkable:
-						cap_key = "top_right"
-					img.blit_rect(wall_images[cap_key], Rect2i(0, 12, TILE, 4), destination + Vector2i(0, 12))
-				continue
-			var floor_image: Image = floor_images[r.randi_range(0, floor_images.size() - 1)]
-			img.blit_rect(floor_image, Rect2i(0, 0, TILE, TILE), destination)
-			_tint_rect(img, destination, TILE, TILE, floor_tint, 0.34)
-			_tint_rect(img, destination, TILE, TILE, Color(1, 1, 1), 0.07)
-			# мягкая тень от стены сверху - даёт глубину комнатам
-			if y > 0 and int(grid[y - 1][x]) == DungeonGenerator.WALL:
-				for py in range(3):
-					_tint_rect(img, destination + Vector2i(0, py), TILE, 1, Color(0, 0, 0), 0.34 - py * 0.08)
-			match tile:
-				DungeonGenerator.WATER:
-					_draw_puddle(img, destination, r)
-				DungeonGenerator.CRYSTAL:
-					_draw_crystal(img, destination, r, accent)
-				DungeonGenerator.MUSHROOM:
-					_draw_mushroom(img, destination, r)
-				DungeonGenerator.ASH:
-					_draw_ash(img, destination, r)
-
-	# Entrance and exit use actual tiles from the pack, not colored markers.
-	var start_cell: Vector2i = dungeon_data["start"]
-	var exit_cell: Vector2i = dungeon_data["exit"]
-	if ladder_texture != null:
-		img.blit_rect(_texture_image_rgba(ladder_texture), Rect2i(0, 0, TILE, TILE), start_cell * TILE)
-	if stairs_texture != null:
-		img.blit_rect(_texture_image_rgba(stairs_texture), Rect2i(0, 0, TILE, TILE), exit_cell * TILE)
-
-	# Add a couple of tall stone pillars to the guardian chamber and a crate to treasure rooms.
-	if column_texture != null:
-		var column_image := _texture_image_rgba(column_texture)
-		for room in dungeon_data["rooms"]:
-			if str(room["type"]) != "boss":
-				continue
-			var room_rect: Rect2i = room["rect"]
-			for cell in [
-				Vector2i(room_rect.position.x + 1, room_rect.position.y + 2),
-				Vector2i(room_rect.end.x - 2, room_rect.position.y + 2)
-			]:
-				var column_pos := Vector2i(cell.x * TILE, (cell.y + 1) * TILE - 48)
-				if column_pos.y >= 0 and column_pos.y + 48 <= CAVE_H:
-					img.blit_rect(column_image, Rect2i(0, 0, 16, 48), column_pos)
-
-	if crate_texture != null:
-		var crate_image := _texture_image_rgba(crate_texture)
-		for room in dungeon_data["rooms"]:
-			if str(room["type"]) != "treasure":
-				continue
-			var room_rect: Rect2i = room["rect"]
-			var crate_cell := Vector2i(room_rect.position.x + 1, room_rect.position.y + 1)
-			var crate_pos := Vector2i(crate_cell.x * TILE, crate_cell.y * TILE - 8)
-			if crate_pos.y >= 0 and crate_pos.y + 24 <= CAVE_H:
-				img.blit_rect(crate_image, Rect2i(0, 0, 16, 24), crate_pos)
-
-	return ImageTexture.create_from_image(img)
-
-
-
-## Мягкая заливка участка картинки цветом с прозрачностью.
+	return DungeonRenderer.build_texture(dungeon_data, lit_seals)
 func _tint_rect(img: Image, origin: Vector2i, w: int, h: int, color: Color, strength: float) -> void:
 	for py in range(h):
 		for px in range(w):
@@ -1397,8 +1394,10 @@ func _do_enter_cave() -> void:
 	in_cave = true
 	_transitioning = false
 	player.velocity = Vector2.ZERO
+	_load_cave_floor(1)
 	var start_cell: Vector2i = dungeon_data.get("start", Vector2i(3, 3))
-	player.position = CAVE_ROOM_ORIGIN + Vector2(start_cell.x * TILE + TILE / 2.0, start_cell.y * TILE + TILE / 2.0)
+	player.position = _cave_cell_pos(start_cell)
+	_cave_grace = 1.2
 	player.facing = Vector2.UP
 	weather_fx.visible = false
 	_apply_camera_limits()
